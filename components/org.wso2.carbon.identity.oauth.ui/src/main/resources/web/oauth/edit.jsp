@@ -63,6 +63,7 @@
 	boolean ntlmGrant = false;
     List<String> allowedGrants = null;
     String applicationSPName = null;
+    OAuthAdminClient client = null;
     try {
 
     	applicationSPName = request.getParameter("appName");
@@ -73,7 +74,7 @@
 		ConfigurationContext configContext =
 		                                     (ConfigurationContext) config.getServletContext()
 		                                                                  .getAttribute(CarbonConstants.CONFIGURATION_CONTEXT);
-		OAuthAdminClient client = new OAuthAdminClient(cookie, backendServerURL, configContext);
+		client = new OAuthAdminClient(cookie, backendServerURL, configContext);
 
 		if (appName!=null){
 			app = client.getOAuthApplicationDataByAppName(appName);
@@ -312,6 +313,7 @@
                                     </table>
                                     </td>
                                 </tr>
+                                <% if(client.isPKCESupportedEnabled()) {%>
                                 <tr id="pkce_enable">
                                     <td class="leftcol-small">
                                         <fmt:message key='pkce.mandatory'/>
@@ -334,6 +336,7 @@
                                         </div>
                                     </td>
                                 </tr>
+                                <% } %>
                             <% } %>
 				</table>
 			</td>

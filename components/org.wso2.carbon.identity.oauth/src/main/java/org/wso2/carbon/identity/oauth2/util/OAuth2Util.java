@@ -39,6 +39,7 @@ import org.wso2.carbon.identity.oauth.dao.OAuthConsumerDAO;
 import org.wso2.carbon.identity.oauth.internal.OAuthComponentServiceHolder;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.authz.OAuthAuthzReqMessageContext;
+import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.model.ClientCredentialDO;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
@@ -790,6 +791,10 @@ public class OAuth2Util {
         return false;
     }
     public static boolean doPKCEValidation(String referenceCodeChallenge, String codeVerifier, String challenge_method, OAuthAppDO oAuthAppDO) throws IdentityOAuth2Exception {
+        //ByPass PKCE validation if PKCE Support is disabled
+        if(!isPKCESupportEnabled()) {
+            return true;
+        }
         if(oAuthAppDO.isPkceMandatory() || referenceCodeChallenge != null){
 
             //As per RFC 7636 Fallback to 'plain' if no code_challenge_method parameter is sent
@@ -852,5 +857,9 @@ public class OAuth2Util {
         }
         //pkce validation successful
         return true;
+    }
+
+    public static boolean isPKCESupportEnabled() {
+        return OAuth2ServiceComponentHolder.isPkceEnabled();
     }
 }

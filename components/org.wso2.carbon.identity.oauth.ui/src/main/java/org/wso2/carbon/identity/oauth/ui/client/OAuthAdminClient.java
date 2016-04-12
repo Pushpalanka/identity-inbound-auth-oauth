@@ -98,6 +98,10 @@ public class OAuthAdminClient {
         return stub.revokeAuthzForAppsByResoureOwner(reqDTO);
     }
 
+    public boolean isPKCESupportedEnabled() throws Exception {
+        return stub.isPKCESupportEnabled();
+    }
+
     public String[] getAllowedOAuthGrantTypes() throws Exception {
         if (allowedGrantTypes == null) {
             allowedGrantTypes = stub.getAllowedGrantTypes();

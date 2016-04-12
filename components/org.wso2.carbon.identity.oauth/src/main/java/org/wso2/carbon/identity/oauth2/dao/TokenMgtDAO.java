@@ -31,6 +31,7 @@ import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth.tokenprocessor.PlainTextPersistenceProcessor;
 import org.wso2.carbon.identity.oauth.tokenprocessor.TokenPersistenceProcessor;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
+import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.model.AuthzCodeDO;
 import org.wso2.carbon.identity.oauth2.model.RefreshTokenValidationDataDO;
@@ -81,7 +82,6 @@ public class TokenMgtDAO {
     private static final Log log = LogFactory.getLog(TokenMgtDAO.class);
 
     private static final String IDN_OAUTH2_ACCESS_TOKEN = "IDN_OAUTH2_ACCESS_TOKEN";
-
 
     static {
 
@@ -155,22 +155,43 @@ public class TokenMgtDAO {
         Connection connection = IdentityDatabaseUtil.getDBConnection();
         PreparedStatement prepStmt = null;
         try {
-            prepStmt = connection.prepareStatement(SQLQueries.STORE_AUTHORIZATION_CODE);
-            prepStmt.setString(1, authzCodeDO.getAuthzCodeId());
-            prepStmt.setString(2, persistenceProcessor.getProcessedAuthzCode(authzCode));
-            prepStmt.setString(3, callbackUrl);
-            prepStmt.setString(4, OAuth2Util.buildScopeString(authzCodeDO.getScope()));
-            prepStmt.setString(5, authzCodeDO.getAuthorizedUser().getUserName());
-            prepStmt.setString(6, getSanitizedUserStoreDomain(authzCodeDO.getAuthorizedUser().getUserStoreDomain()));
-            int tenantId = OAuth2Util.getTenantId(authzCodeDO.getAuthorizedUser().getTenantDomain());
-            prepStmt.setInt(7, tenantId);
-            prepStmt.setTimestamp(8, authzCodeDO.getIssuedTime(),
-                                  Calendar.getInstance(TimeZone.getTimeZone(UTC)));
-            prepStmt.setLong(9, authzCodeDO.getValidityPeriod());
-            prepStmt.setString(10, authzCodeDO.getAuthorizedUser().getAuthenticatedSubjectIdentifier());
-            prepStmt.setString(11, authzCodeDO.getPkceCodeChallenge());
-            prepStmt.setString(12, authzCodeDO.getPkceCodeChallengeMethod());
-            prepStmt.setString(13, persistenceProcessor.getProcessedClientId(consumerKey));
+
+            if(OAuth2ServiceComponentHolder.isPkceEnabled()) {
+                prepStmt = connection.prepareStatement(SQLQueries.STORE_AUTHORIZATION_CODE_WITH_PKCE);
+                prepStmt.setString(1, authzCodeDO.getAuthzCodeId());
+                prepStmt.setString(2, persistenceProcessor.getProcessedAuthzCode(authzCode));
+                prepStmt.setString(3, callbackUrl);
+                prepStmt.setString(4, OAuth2Util.buildScopeString(authzCodeDO.getScope()));
+                prepStmt.setString(5, authzCodeDO.getAuthorizedUser().getUserName());
+                prepStmt.setString(6, getSanitizedUserStoreDomain(authzCodeDO.getAuthorizedUser().getUserStoreDomain()));
+                int tenantId = OAuth2Util.getTenantId(authzCodeDO.getAuthorizedUser().getTenantDomain());
+                prepStmt.setInt(7, tenantId);
+                prepStmt.setTimestamp(8, authzCodeDO.getIssuedTime(),
+                        Calendar.getInstance(TimeZone.getTimeZone(UTC)));
+                prepStmt.setLong(9, authzCodeDO.getValidityPeriod());
+                prepStmt.setString(10, authzCodeDO.getAuthorizedUser().getAuthenticatedSubjectIdentifier());
+                prepStmt.setString(11, authzCodeDO.getPkceCodeChallenge());
+                prepStmt.setString(12, authzCodeDO.getPkceCodeChallengeMethod());
+                prepStmt.setString(13, persistenceProcessor.getProcessedClientId(consumerKey));
+
+            } else {
+                prepStmt = connection.prepareStatement(SQLQueries.STORE_AUTHORIZATION_CODE);
+                prepStmt.setString(1, authzCodeDO.getAuthzCodeId());
+                prepStmt.setString(2, persistenceProcessor.getProcessedAuthzCode(authzCode));
+                prepStmt.setString(3, callbackUrl);
+                prepStmt.setString(4, OAuth2Util.buildScopeString(authzCodeDO.getScope()));
+                prepStmt.setString(5, authzCodeDO.getAuthorizedUser().getUserName());
+                prepStmt.setString(6, getSanitizedUserStoreDomain(authzCodeDO.getAuthorizedUser().getUserStoreDomain()));
+                int tenantId = OAuth2Util.getTenantId(authzCodeDO.getAuthorizedUser().getTenantDomain());
+                prepStmt.setInt(7, tenantId);
+                prepStmt.setTimestamp(8, authzCodeDO.getIssuedTime(),
+                        Calendar.getInstance(TimeZone.getTimeZone(UTC)));
+                prepStmt.setLong(9, authzCodeDO.getValidityPeriod());
+                prepStmt.setString(10, authzCodeDO.getAuthorizedUser().getAuthenticatedSubjectIdentifier());
+                prepStmt.setString(11, persistenceProcessor.getProcessedClientId(consumerKey));
+
+            }
+
 
             prepStmt.execute();
             connection.commit();
@@ -238,7 +259,7 @@ public class TokenMgtDAO {
                     .getTimeZone(UTC)));
             prepStmt.setLong(8, accessTokenDO.getValidityPeriodInMillis());
             prepStmt.setLong(9, accessTokenDO.getRefreshTokenValidityPeriodInMillis());
-            prepStmt.setString(10, OAuth2Util.hashScopes(accessTokenDO.getScope()));
+                prepStmt.setString(10, OAuth2Util.hashScopes(accessTokenDO.getScope()));
             prepStmt.setString(11, accessTokenDO.getTokenState());
             prepStmt.setString(12, accessTokenDO.getTokenType());
             prepStmt.setString(13, accessTokenDO.getTokenId());
@@ -398,7 +419,7 @@ public class TokenMgtDAO {
 
             resultSet = prepStmt.executeQuery();
             connection.commit();
-            
+
             if (resultSet.next()) {
                 boolean returnToken = false;
                 String tokenState = resultSet.getString(7);
@@ -555,49 +576,103 @@ public class TokenMgtDAO {
         ResultSet resultSet = null;
 
         try {
-            prepStmt = connection.prepareStatement(SQLQueries.VALIDATE_AUTHZ_CODE);
-            prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerKey));
-            prepStmt.setString(2, persistenceProcessor.getProcessedAuthzCode(authorizationKey));
-            resultSet = prepStmt.executeQuery();
+            AuthenticatedUser user = null;
+            String codeState = null;
+            String authorizedUser = null;
+            String userstoreDomain = null;
+            String scopeString = null;
+            String callbackUrl = null;
+            String tenantDomain = null;
+            String codeId = null;
+            String subjectIdentifier = null;
+            String pkceCodeChallenge = null;
+            String pkceCodeChallengeMethod = null;
 
-            if (resultSet.next()) {
-                String codeState = resultSet.getString(8);
-                String authorizedUser = resultSet.getString(1);
-                String userstoreDomain = resultSet.getString(2);
-                int tenantId = resultSet.getInt(3);
-                String tenantDomain = OAuth2Util.getTenantDomain(tenantId);
-                String scopeString = resultSet.getString(4);
-                String callbackUrl = resultSet.getString(5);
-                Timestamp issuedTime = resultSet.getTimestamp(6, Calendar.getInstance(TimeZone.getTimeZone(UTC)));
-                long validityPeriod = resultSet.getLong(7);
-                String codeId = resultSet.getString(11);
-                String subjectIdentifier = resultSet.getString(12);
+            Timestamp issuedTime = null;
+            long validityPeriod = 0;
+            int tenantId;
+            if (OAuth2ServiceComponentHolder.isPkceEnabled()) {
 
-                AuthenticatedUser user = new AuthenticatedUser();
-                user.setUserName(authorizedUser);
-                user.setTenantDomain(tenantDomain);
-                user.setUserStoreDomain(userstoreDomain);
-                user.setAuthenticatedSubjectIdentifier(subjectIdentifier);
-                authorizedUser = UserCoreUtil.addDomainToName(authorizedUser, userstoreDomain);
-                authorizedUser = UserCoreUtil.addTenantDomainToEntry(authorizedUser, tenantDomain);
+                prepStmt = connection.prepareStatement(SQLQueries.VALIDATE_AUTHZ_CODE_WITH_PKCE);
+                prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerKey));
+                prepStmt.setString(2, persistenceProcessor.getProcessedAuthzCode(authorizationKey));
+                resultSet = prepStmt.executeQuery();
 
-                if (!OAuthConstants.AuthorizationCodeState.ACTIVE.equals(codeState)){
-                    //revoking access token issued for authorization code as per RFC 6749 Section 4.1.2
-                    String tokenId = resultSet.getString(9);
-                    revokeToken(tokenId, authorizedUser);
+                if (resultSet.next()) {
+                    codeState = resultSet.getString(8);
+                    authorizedUser = resultSet.getString(1);
+                    userstoreDomain = resultSet.getString(2);
+                    tenantId = resultSet.getInt(3);
+                    tenantDomain = OAuth2Util.getTenantDomain(tenantId);
+                    scopeString = resultSet.getString(4);
+                    callbackUrl = resultSet.getString(5);
+                    issuedTime = resultSet.getTimestamp(6, Calendar.getInstance(TimeZone.getTimeZone(UTC)));
+                    validityPeriod = resultSet.getLong(7);
+                    codeId = resultSet.getString(11);
+                    subjectIdentifier = resultSet.getString(12);
+                    pkceCodeChallenge = resultSet.getString(13);
+                    pkceCodeChallengeMethod = resultSet.getString(14);
+                    user = new AuthenticatedUser();
+                    user.setUserName(authorizedUser);
+                    user.setTenantDomain(tenantDomain);
+                    user.setUserStoreDomain(userstoreDomain);
+                    user.setAuthenticatedSubjectIdentifier(subjectIdentifier);
+                    authorizedUser = UserCoreUtil.addDomainToName(authorizedUser, userstoreDomain);
+                    authorizedUser = UserCoreUtil.addTenantDomainToEntry(authorizedUser, tenantDomain);
+
+                    if (!OAuthConstants.AuthorizationCodeState.ACTIVE.equals(codeState)) {
+                        //revoking access token issued for authorization code as per RFC 6749 Section 4.1.2
+                        String tokenId = resultSet.getString(9);
+                        revokeToken(tokenId, authorizedUser);
+                    }
+
                 }
+            } else {
+                prepStmt = connection.prepareStatement(SQLQueries.VALIDATE_AUTHZ_CODE);
+                prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerKey));
+                prepStmt.setString(2, persistenceProcessor.getProcessedAuthzCode(authorizationKey));
+                resultSet = prepStmt.executeQuery();
 
-                return new AuthzCodeDO(user, OAuth2Util.buildScopeArray(scopeString), issuedTime, validityPeriod,
-                        callbackUrl, consumerKey, authorizationKey, codeId, codeState);
+                if (resultSet.next()) {
+                    codeState = resultSet.getString(8);
+                    authorizedUser = resultSet.getString(1);
+                    userstoreDomain = resultSet.getString(2);
+                    tenantId = resultSet.getInt(3);
+                    tenantDomain = OAuth2Util.getTenantDomain(tenantId);
+                    scopeString = resultSet.getString(4);
+                    callbackUrl = resultSet.getString(5);
+                    issuedTime = resultSet.getTimestamp(6, Calendar.getInstance(TimeZone.getTimeZone(UTC)));
+                    validityPeriod = resultSet.getLong(7);
+                    codeId = resultSet.getString(11);
+                    subjectIdentifier = resultSet.getString(12);
+
+                    user = new AuthenticatedUser();
+                    user.setUserName(authorizedUser);
+                    user.setTenantDomain(tenantDomain);
+                    user.setUserStoreDomain(userstoreDomain);
+                    user.setAuthenticatedSubjectIdentifier(subjectIdentifier);
+                    authorizedUser = UserCoreUtil.addDomainToName(authorizedUser, userstoreDomain);
+                    authorizedUser = UserCoreUtil.addTenantDomainToEntry(authorizedUser, tenantDomain);
+
+                    if (!OAuthConstants.AuthorizationCodeState.ACTIVE.equals(codeState)) {
+                        //revoking access token issued for authorization code as per RFC 6749 Section 4.1.2
+                        String tokenId = resultSet.getString(9);
+                        revokeToken(tokenId, authorizedUser);
+                    }
+                }
             }
+
             connection.commit();
+            return new AuthzCodeDO(user, OAuth2Util.buildScopeArray(scopeString), issuedTime, validityPeriod,
+                    callbackUrl, consumerKey, authorizationKey, codeId, codeState, pkceCodeChallenge,
+                    pkceCodeChallengeMethod);
+
         } catch (SQLException e) {
             throw new IdentityOAuth2Exception("Error when validating an authorization code", e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, resultSet, prepStmt);
         }
 
-        return null;
     }
 
     public void expireAuthzCode(String authzCode) throws IdentityOAuth2Exception {

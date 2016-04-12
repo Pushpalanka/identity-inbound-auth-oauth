@@ -85,6 +85,13 @@ public class AuthzCodeDO extends CacheEntry {
         this.pkceCodeChallenge = pkceCodeChallenge;
         this.pkceCodeChallengeMethod = pkceCodeChallengeMethod;
     }
+
+    public AuthzCodeDO(AuthenticatedUser authorizedUser, String[] scope, Timestamp issuedTime, long validityPeriod, String
+            callbackUrl, String consumerKey, String authorizationCode, String authzCodeId, String state, String pkceCodeChallenge, String pkceCodeChallengeMethod) {
+        this(authorizedUser, scope, issuedTime, validityPeriod, callbackUrl, consumerKey,authorizationCode,authzCodeId, state);
+        this.pkceCodeChallenge = pkceCodeChallenge;
+        this.pkceCodeChallengeMethod = pkceCodeChallengeMethod;
+    }
     public AuthzCodeDO() {
     }
 

@@ -44,6 +44,7 @@ import org.wso2.carbon.identity.oauth.event.OAuthEventListener;
 import org.wso2.carbon.identity.oauth.internal.OAuthComponentServiceHolder;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.dao.TokenMgtDAO;
+import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.user.api.UserStoreException;
@@ -581,5 +582,11 @@ public class OAuthAdminService extends AbstractAdmin {
             }
         }
         return allowedGrants.toArray(new String[allowedGrants.size()]);
+    }
+    /**
+     * @return true if PKCE is supported by the database, false if not
+     */
+    public boolean isPKCESupportEnabled() {
+        return OAuth2Util.isPKCESupportEnabled();
     }
 }

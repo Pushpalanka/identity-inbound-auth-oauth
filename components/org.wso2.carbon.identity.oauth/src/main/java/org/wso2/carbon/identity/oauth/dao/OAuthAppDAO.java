@@ -35,6 +35,7 @@ import org.wso2.carbon.identity.oauth.internal.OAuthComponentServiceHolder;
 import org.wso2.carbon.identity.oauth.tokenprocessor.PlainTextPersistenceProcessor;
 import org.wso2.carbon.identity.oauth.tokenprocessor.TokenPersistenceProcessor;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
+import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.user.api.UserStoreException;
 import org.wso2.carbon.user.core.service.RealmService;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
@@ -71,21 +72,37 @@ public class OAuthAppDAO {
 
         if (!isDuplicateApplication(consumerAppDO.getUser().getUserName(), IdentityTenantUtil.getTenantId(consumerAppDO
                 .getUser().getTenantDomain()), consumerAppDO.getUser().getUserStoreDomain(), consumerAppDO)) {
+
             try {
-                prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.ADD_OAUTH_APP);
-                prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerAppDO.getOauthConsumerKey()));
-                prepStmt.setString(2, persistenceProcessor.getProcessedClientSecret(consumerAppDO.getOauthConsumerSecret()));
-                prepStmt.setString(3, consumerAppDO.getUser().getUserName());
-                prepStmt.setInt(4, IdentityTenantUtil.getTenantId(consumerAppDO.getUser().getTenantDomain()));
-                prepStmt.setString(5, consumerAppDO.getUser().getUserStoreDomain());
-                prepStmt.setString(6, consumerAppDO.getApplicationName());
-                prepStmt.setString(7, consumerAppDO.getOauthVersion());
-                prepStmt.setString(8, consumerAppDO.getCallbackUrl());
-                prepStmt.setString(9, consumerAppDO.getGrantTypes());
-                prepStmt.setString(10, consumerAppDO.isPkceMandatory() ? "1" : "0");
-                prepStmt.setString(11, consumerAppDO.isPkceSupportPlain() ? "1" : "0");
-                prepStmt.execute();
-                connection.commit();
+                if(OAuth2ServiceComponentHolder.isPkceEnabled()) {
+                    prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.ADD_OAUTH_APP_WITH_PKCE);
+                    prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerAppDO.getOauthConsumerKey()));
+                    prepStmt.setString(2, persistenceProcessor.getProcessedClientSecret(consumerAppDO.getOauthConsumerSecret()));
+                    prepStmt.setString(3, consumerAppDO.getUser().getUserName());
+                    prepStmt.setInt(4, IdentityTenantUtil.getTenantId(consumerAppDO.getUser().getTenantDomain()));
+                    prepStmt.setString(5, consumerAppDO.getUser().getUserStoreDomain());
+                    prepStmt.setString(6, consumerAppDO.getApplicationName());
+                    prepStmt.setString(7, consumerAppDO.getOauthVersion());
+                    prepStmt.setString(8, consumerAppDO.getCallbackUrl());
+                    prepStmt.setString(9, consumerAppDO.getGrantTypes());
+                    prepStmt.setString(10, consumerAppDO.isPkceMandatory() ? "1" : "0");
+                    prepStmt.setString(11, consumerAppDO.isPkceSupportPlain() ? "1" : "0");
+                    prepStmt.execute();
+                    connection.commit();
+                } else {
+                    prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.ADD_OAUTH_APP);
+                    prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerAppDO.getOauthConsumerKey()));
+                    prepStmt.setString(2, persistenceProcessor.getProcessedClientSecret(consumerAppDO.getOauthConsumerSecret()));
+                    prepStmt.setString(3, consumerAppDO.getUser().getUserName());
+                    prepStmt.setInt(4, IdentityTenantUtil.getTenantId(consumerAppDO.getUser().getTenantDomain()));
+                    prepStmt.setString(5, consumerAppDO.getUser().getUserStoreDomain());
+                    prepStmt.setString(6, consumerAppDO.getApplicationName());
+                    prepStmt.setString(7, consumerAppDO.getOauthVersion());
+                    prepStmt.setString(8, consumerAppDO.getCallbackUrl());
+                    prepStmt.setString(9, consumerAppDO.getGrantTypes());
+                    prepStmt.execute();
+                    connection.commit();
+                }
 
             } catch (SQLException e) {
                 throw new IdentityOAuthAdminException("Error when executing the SQL : " +
@@ -148,8 +165,15 @@ public class OAuthAppDAO {
             String tenantAwareUserName = MultitenantUtils.getTenantAwareUsername(username);
             String tenantUnawareUserName = tenantAwareUserName + "@" + tenantDomain;
             boolean isUsernameCaseSensitive = IdentityUtil.isUserStoreInUsernameCaseSensitive(tenantUnawareUserName);
+            boolean isPKCESupportEnabled = OAuth2ServiceComponentHolder.isPkceEnabled();
 
-            String sql = SQLQueries.OAuthAppDAOSQLQueries.GET_APPS_OF_USER_WITH_TENANTAWARE_OR_TENANTUNAWARE_USERNAME;
+            String sql = null;
+            if(isPKCESupportEnabled) {
+                sql = SQLQueries.OAuthAppDAOSQLQueries.GET_APPS_OF_USER_WITH_TENANTAWARE_OR_TENANTUNAWARE_USERNAME_WITH_PKCE;
+            } else {
+                sql = SQLQueries.OAuthAppDAOSQLQueries.GET_APPS_OF_USER_WITH_TENANTAWARE_OR_TENANTUNAWARE_USERNAME;
+            }
+
             if (!isUsernameCaseSensitive) {
                 sql = sql.replace("USERNAME", "LOWER(USERNAME)");
             }
@@ -180,8 +204,10 @@ public class OAuthAppDAO {
                     authenticatedUser.setUserName(rSet.getString(8));
                     authenticatedUser.setTenantDomain(IdentityTenantUtil.getTenantDomain(rSet.getInt(9)));
                     authenticatedUser.setUserStoreDomain(rSet.getString(10));
-                    oauthApp.setPkceMandatory("0".equals(rSet.getString(11)) ? false : true);
-                    oauthApp.setPkceSupportPlain("0".equals(rSet.getString(12)) ? false : true);
+                    if(isPKCESupportEnabled) {
+                        oauthApp.setPkceMandatory("0".equals(rSet.getString(11)) ? false : true);
+                        oauthApp.setPkceSupportPlain("0".equals(rSet.getString(12)) ? false : true);
+                    }
                     oauthApp.setUser(authenticatedUser);
                     oauthApps.add(oauthApp);
                 }
@@ -206,9 +232,14 @@ public class OAuthAppDAO {
         PreparedStatement prepStmt = null;
         ResultSet rSet = null;
         OAuthAppDO oauthApp = null;
-
+        boolean isPKCESupportEnabled = OAuth2ServiceComponentHolder.isPkceEnabled();
         try {
-            prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.GET_APP_INFO);
+            if (isPKCESupportEnabled) {
+                prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.GET_APP_INFO_WITH_PKCE);
+            } else {
+                prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.GET_APP_INFO);
+            }
+
             prepStmt.setString(1, persistenceProcessor.getProcessedClientId(consumerKey));
 
             rSet = prepStmt.executeQuery();
@@ -236,8 +267,10 @@ public class OAuthAppDAO {
                     oauthApp.setUser(authenticatedUser);
                     oauthApp.setGrantTypes(rSet.getString(8));
                     oauthApp.setId(rSet.getInt(9));
-                    oauthApp.setPkceMandatory("0".equals(rSet.getString(10)) ? false : true);
-                    oauthApp.setPkceSupportPlain("0".equals(rSet.getString(11)) ? false : true);
+                    if (isPKCESupportEnabled) {
+                        oauthApp.setPkceMandatory("0".equals(rSet.getString(10)) ? false : true);
+                        oauthApp.setPkceSupportPlain("0".equals(rSet.getString(11)) ? false : true);
+                    }
                     oauthApps.add(oauthApp);
                 }
             }
@@ -264,10 +297,15 @@ public class OAuthAppDAO {
         PreparedStatement prepStmt = null;
         ResultSet rSet = null;
         OAuthAppDO oauthApp = null;
-
+        boolean isPKCESupportEnabled = OAuth2ServiceComponentHolder.isPkceEnabled();
         try {
             int tenantID = CarbonContext.getThreadLocalCarbonContext().getTenantId();
-            prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.GET_APP_INFO_BY_APP_NAME);
+            if (isPKCESupportEnabled) {
+                prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.GET_APP_INFO_BY_APP_NAME_WITH_PKCE);
+            } else {
+                prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.GET_APP_INFO_BY_APP_NAME);
+            }
+
             prepStmt.setString(1, appName);
             prepStmt.setInt(2, tenantID);
 
@@ -296,8 +334,10 @@ public class OAuthAppDAO {
                     oauthApp.setCallbackUrl(rSet.getString(6));
                     oauthApp.setGrantTypes(rSet.getString(7));
                     oauthApp.setId(rSet.getInt(8));
-                    oauthApp.setPkceMandatory("0".equals(rSet.getString(9)) ? false : true);
-                    oauthApp.setPkceSupportPlain("0".equals(rSet.getString(10)) ? false : true);
+                    if(isPKCESupportEnabled) {
+                        oauthApp.setPkceMandatory("0".equals(rSet.getString(9)) ? false : true);
+                        oauthApp.setPkceSupportPlain("0".equals(rSet.getString(10)) ? false : true);
+                    }
                     oauthApps.add(oauthApp);
                 }
             }
@@ -327,14 +367,25 @@ public class OAuthAppDAO {
         PreparedStatement prepStmt = null;
 
         try {
-            prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.UPDATE_CONSUMER_APP);
+            if (OAuth2ServiceComponentHolder.isPkceEnabled()) {
+                prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.UPDATE_CONSUMER_APP_WITH_PKCE);
+            } else {
+                prepStmt = connection.prepareStatement(SQLQueries.OAuthAppDAOSQLQueries.UPDATE_CONSUMER_APP);
+            }
+
             prepStmt.setString(1, oauthAppDO.getApplicationName());
             prepStmt.setString(2, oauthAppDO.getCallbackUrl());
             prepStmt.setString(3, oauthAppDO.getGrantTypes());
-            prepStmt.setString(4, oauthAppDO.isPkceMandatory() ? "1" : "0");
-            prepStmt.setString(5, oauthAppDO.isPkceSupportPlain() ? "1" : "0");
-            prepStmt.setString(6, persistenceProcessor.getProcessedClientId(oauthAppDO.getOauthConsumerKey()));
-            prepStmt.setString(7, persistenceProcessor.getProcessedClientSecret(oauthAppDO.getOauthConsumerSecret()));
+            if(OAuth2ServiceComponentHolder.isPkceEnabled()) {
+                prepStmt.setString(4, oauthAppDO.isPkceMandatory() ? "1" : "0");
+                prepStmt.setString(5, oauthAppDO.isPkceSupportPlain() ? "1" : "0");
+
+                prepStmt.setString(6, persistenceProcessor.getProcessedClientId(oauthAppDO.getOauthConsumerKey()));
+                prepStmt.setString(7, persistenceProcessor.getProcessedClientSecret(oauthAppDO.getOauthConsumerSecret()));
+            } else {
+                prepStmt.setString(4, persistenceProcessor.getProcessedClientId(oauthAppDO.getOauthConsumerKey()));
+                prepStmt.setString(5, persistenceProcessor.getProcessedClientSecret(oauthAppDO.getOauthConsumerSecret()));
+            }
 
             int count = prepStmt.executeUpdate();
             if (log.isDebugEnabled()) {

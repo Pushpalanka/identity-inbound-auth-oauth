@@ -4,6 +4,18 @@
         <xs:schema xmlns:ax2332="http://dto.oauth.identity.carbon.wso2.org/xsd" xmlns:ns="http://org.apache.axis2/xsd" xmlns:ax2336="http://oauth.identity.carbon.wso2.org/xsd" attributeFormDefault="qualified" elementFormDefault="qualified" targetNamespace="http://org.apache.axis2/xsd">
             <xs:import namespace="http://dto.oauth.identity.carbon.wso2.org/xsd"></xs:import>
             <xs:import namespace="http://oauth.identity.carbon.wso2.org/xsd"></xs:import>
+            <xs:element name="isPKCESupportEnabled">
+                <xs:complexType>
+                    <xs:sequence/>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="isPKCESupportEnabledResponse">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element minOccurs="0" name="return" type="xs:boolean"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
             <xs:element name="OAuthAdminServiceException">
                 <xs:complexType>
                     <xs:sequence>
@@ -181,6 +193,12 @@
             </xs:complexType>
         </xs:schema>
     </wsdl:types>
+    <wsdl:message name="isPKCESupportEnabledRequest">
+        <wsdl:part name="parameters" element="ns1:isPKCESupportEnabled"/>
+    </wsdl:message>
+    <wsdl:message name="isPKCESupportEnabledResponse">
+        <wsdl:part name="parameters" element="ns1:isPKCESupportEnabledResponse"/>
+    </wsdl:message>
     <wsdl:message name="registerOAuthConsumerRequest">
         <wsdl:part name="parameters" element="ns1:registerOAuthConsumer"></wsdl:part>
     </wsdl:message>
@@ -239,6 +257,10 @@
         <wsdl:part name="parameters" element="ns1:revokeAuthzForAppsByResoureOwnerResponse"></wsdl:part>
     </wsdl:message>
     <wsdl:portType name="OAuthAdminServicePortType">
+        <wsdl:operation name="isPKCESupportEnabled">
+            <wsdl:input message="tns:isPKCESupportEnabledRequest" wsaw:Action="urn:isPKCESupportEnabled"/>
+            <wsdl:output message="tns:isPKCESupportEnabledResponse" wsaw:Action="urn:isPKCESupportEnabledResponse"/>
+        </wsdl:operation>
         <wsdl:operation name="registerOAuthConsumer">
             <wsdl:input message="tns:registerOAuthConsumerRequest" wsaw:Action="urn:registerOAuthConsumer"></wsdl:input>
             <wsdl:output message="tns:registerOAuthConsumerResponse" wsaw:Action="urn:registerOAuthConsumerResponse"></wsdl:output>
@@ -288,6 +310,15 @@
     </wsdl:portType>
     <wsdl:binding name="OAuthAdminServiceSoap11Binding" type="tns:OAuthAdminServicePortType">
         <soap:binding transport="http://schemas.xmlsoap.org/soap/http" style="document"></soap:binding>
+        <wsdl:operation name="isPKCESupportEnabled">
+            <soap:operation soapAction="urn:isPKCESupportEnabled" style="document"/>
+            <wsdl:input>
+                <soap:body use="literal"/>
+            </wsdl:input>
+            <wsdl:output>
+                <soap:body use="literal"/>
+            </wsdl:output>
+        </wsdl:operation>
         <wsdl:operation name="registerOAuthConsumer">
             <soap:operation soapAction="urn:registerOAuthConsumer" style="document"></soap:operation>
             <wsdl:input>
@@ -399,6 +430,15 @@
     </wsdl:binding>
     <wsdl:binding name="OAuthAdminServiceSoap12Binding" type="tns:OAuthAdminServicePortType">
         <soap12:binding transport="http://schemas.xmlsoap.org/soap/http" style="document"></soap12:binding>
+        <wsdl:operation name="isPKCESupportEnabled">
+            <soap12:operation soapAction="urn:isPKCESupportEnabled" style="document"/>
+            <wsdl:input>
+                <soap12:body use="literal"/>
+            </wsdl:input>
+            <wsdl:output>
+                <soap12:body use="literal"/>
+            </wsdl:output>
+        </wsdl:operation>
         <wsdl:operation name="registerOAuthConsumer">
             <soap12:operation soapAction="urn:registerOAuthConsumer" style="document"></soap12:operation>
             <wsdl:input>
@@ -510,6 +550,15 @@
     </wsdl:binding>
     <wsdl:binding name="OAuthAdminServiceHttpBinding" type="tns:OAuthAdminServicePortType">
         <http:binding verb="POST"></http:binding>
+        <wsdl:operation name="isPKCESupportEnabled">
+            <http:operation location="isPKCESupportEnabled"/>
+            <wsdl:input>
+                <mime:content type="text/xml" part="parameters"/>
+            </wsdl:input>
+            <wsdl:output>
+                <mime:content type="text/xml" part="parameters"/>
+            </wsdl:output>
+        </wsdl:operation>
         <wsdl:operation name="registerOAuthConsumer">
             <http:operation location="registerOAuthConsumer"></http:operation>
             <wsdl:input>
