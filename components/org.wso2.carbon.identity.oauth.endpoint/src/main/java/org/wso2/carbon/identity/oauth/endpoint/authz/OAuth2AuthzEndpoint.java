@@ -243,17 +243,8 @@ public class OAuth2AuthzEndpoint {
                 }
 
             } else if (resultFromLogin != null) { // Authentication response
-                long authTime = 0;
                 Cookie cookie = FrameworkUtils.getAuthCookie(request);
-                if (cookie != null) {
-                    String sessionContextKey = DigestUtils.sha256Hex(cookie.getValue());
-                    SessionContext sessionContext = FrameworkUtils.getSessionContextFromCache(sessionContextKey);
-                    if (sessionContext.getProperty(FrameworkConstants.UPDATED_TIMESTAMP) != null) {
-                        authTime = Long.parseLong(sessionContext.getProperty(FrameworkConstants.UPDATED_TIMESTAMP).toString());
-                    } else {
-                        authTime = Long.parseLong(sessionContext.getProperty(FrameworkConstants.CREATED_TIMESTAMP).toString());
-                    }
-                }
+                long authTime = getAuthenticatedTimeFromCookie(cookie);
                 sessionDataCacheEntry = resultFromLogin;
                 if (authTime > 0) {
                     sessionDataCacheEntry.setAuthTime(authTime);
@@ -331,17 +322,8 @@ public class OAuth2AuthzEndpoint {
                 }
 
             } else if (resultFromConsent != null) { // Consent submission
-                long authTime = 0;
                 Cookie cookie = FrameworkUtils.getAuthCookie(request);
-                if (cookie != null) {
-                    String sessionContextKey = DigestUtils.sha256Hex(cookie.getValue());
-                    SessionContext sessionContext = FrameworkUtils.getSessionContextFromCache(sessionContextKey);
-                    if (sessionContext.getProperty(FrameworkConstants.UPDATED_TIMESTAMP) != null) {
-                        authTime = Long.parseLong(sessionContext.getProperty(FrameworkConstants.UPDATED_TIMESTAMP).toString());
-                    } else {
-                        authTime = Long.parseLong(sessionContext.getProperty(FrameworkConstants.CREATED_TIMESTAMP).toString());
-                    }
-                }
+                long authTime = getAuthenticatedTimeFromCookie(cookie);
                 sessionDataCacheEntry = resultFromConsent;
                 OAuth2Parameters oauth2Params = sessionDataCacheEntry.getoAuth2Parameters();
                 if (authTime > 0) {
@@ -1273,5 +1255,26 @@ public class OAuth2AuthzEndpoint {
             }
         }
         return redirectURL;
+    }
+
+    /*
+    Get last authenticated timestamp from cookie.
+ */
+    private long getAuthenticatedTimeFromCookie(Cookie cookie) {
+        long authTime = 0;
+        if (cookie != null) {
+            String sessionContextKey = DigestUtils.sha256Hex(cookie.getValue());
+            SessionContext sessionContext = FrameworkUtils.getSessionContextFromCache(sessionContextKey);
+            if (sessionContext != null) {
+                if (sessionContext.getProperty(FrameworkConstants.UPDATED_TIMESTAMP) != null) {
+                    authTime = Long.parseLong(
+                            sessionContext.getProperty(FrameworkConstants.UPDATED_TIMESTAMP).toString());
+                } else {
+                    authTime = Long.parseLong(
+                            sessionContext.getProperty(FrameworkConstants.CREATED_TIMESTAMP).toString());
+                }
+            }
+        }
+        return authTime;
     }
 }
