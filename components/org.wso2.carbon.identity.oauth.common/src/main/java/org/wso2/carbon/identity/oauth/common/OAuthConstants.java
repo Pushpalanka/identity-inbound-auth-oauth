@@ -112,7 +112,7 @@ public final class OAuthConstants {
 
     public static final String TENANT_NAME_FROM_CONTEXT = "TenantNameFromContext";
 
-    public static final String AUTHENTICATION_RESULT_ERROR_PARAM_KEY = "OAuthErrorKey";
+    public static final String AUTHENTICATION_RESULT_ERROR_PARAM_KEY = "AuthenticationError";
 
     public static class GrantTypes {
         public static final String IMPLICIT = "implicit";
