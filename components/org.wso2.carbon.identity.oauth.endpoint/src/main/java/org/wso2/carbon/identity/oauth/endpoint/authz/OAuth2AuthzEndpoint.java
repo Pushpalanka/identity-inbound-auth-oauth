@@ -106,6 +106,8 @@ public class OAuth2AuthzEndpoint {
     private static final String REDIRECT_URI = "redirect_uri";
     private static final String RESPONSE_MODE_FORM_POST = "form_post";
     private static final String RESPONSE_MODE = "response_mode";
+    private static final String AUTHENTICATION_RESULT_ERROR_PARAM_KEY = "AuthenticationError";
+
     @GET
     @Path("/")
     @Consumes("application/x-www-form-urlencoded")
@@ -296,7 +298,7 @@ public class OAuth2AuthzEndpoint {
 
                         OAuthProblemException oauthException;
                         Object authError =
-                                authnResult.getProperty(OAuthConstants.AUTHENTICATION_RESULT_ERROR_PARAM_KEY);
+                                authnResult.getProperty(AUTHENTICATION_RESULT_ERROR_PARAM_KEY);
                         if (authError != null && authError instanceof OAuthProblemException) {
                             oauthException = (OAuthProblemException) authError;
                         } else {
