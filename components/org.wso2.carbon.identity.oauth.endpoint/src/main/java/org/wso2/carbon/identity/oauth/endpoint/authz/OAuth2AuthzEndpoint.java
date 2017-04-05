@@ -1267,6 +1267,9 @@ public class OAuth2AuthzEndpoint {
         Cookie opBrowserStateCookie = OIDCSessionManagementUtil.getOPBrowserStateCookie(request);
         if (sessionStateObj.isAuthenticated()) { // successful user authentication
             if (opBrowserStateCookie == null) { // new browser session
+                if (log.isDebugEnabled()) {
+                    log.debug("User authenticated. Initiate OIDC browser session.");
+                }
                 opBrowserStateCookie = OIDCSessionManagementUtil.addOPBrowserStateCookie(response);
 
                 sessionStateObj.setAuthenticatedUser(authenticatedUser);
@@ -1280,6 +1283,9 @@ public class OAuth2AuthzEndpoint {
                 if (previousSessionState != null) {
                     if (!previousSessionState.getSessionParticipants().contains(oAuth2Parameters.getClientId())) {
                         // User is authenticated to a new client. Restore browser session state
+                        if (log.isDebugEnabled()) {
+                            log.debug("User is authenticated to a new client. Restore browser session state.");
+                        }
                         String oldOPBrowserStateCookieId = opBrowserStateCookie.getValue();
                         opBrowserStateCookie = OIDCSessionManagementUtil.addOPBrowserStateCookie(response);
                         String newOPBrowserStateCookieId = opBrowserStateCookie.getValue();
@@ -1289,6 +1295,14 @@ public class OAuth2AuthzEndpoint {
                     }
                 } else {
                     log.warn("No session state found for the received Session ID : " + opBrowserStateCookie.getValue());
+                    if (log.isDebugEnabled()) {
+                        log.debug("Restore browser session state.");
+                    }
+                    opBrowserStateCookie = OIDCSessionManagementUtil.addOPBrowserStateCookie(response);
+                    sessionStateObj.setAuthenticatedUser(authenticatedUser);
+                    sessionStateObj.addSessionParticipant(oAuth2Parameters.getClientId());
+                    OIDCSessionManagementUtil.getSessionManager()
+                            .storeOIDCSessionState(opBrowserStateCookie.getValue(), sessionStateObj);
                 }
             }
         }
