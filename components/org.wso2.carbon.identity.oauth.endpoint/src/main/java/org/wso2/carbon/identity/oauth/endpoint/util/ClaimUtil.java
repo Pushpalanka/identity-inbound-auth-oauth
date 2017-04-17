@@ -23,6 +23,7 @@ import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.oltu.oauth2.common.error.OAuthError;
 import org.wso2.carbon.identity.application.authentication.framework.exception.FrameworkException;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkConstants;
 import org.wso2.carbon.identity.application.common.model.ClaimMapping;
@@ -36,7 +37,6 @@ import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.dao.OAuthAppDO;
 import org.wso2.carbon.identity.oauth.user.UserInfoEndpointException;
-import org.wso2.carbon.identity.oauth2.dao.TokenMgtDAO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2TokenValidationResponseDTO;
 import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
@@ -83,13 +83,16 @@ public class ClaimUtil {
 
             UserStoreManager userstore = realm.getUserStoreManager();
 
-            TokenMgtDAO tokenMgtDAO = new TokenMgtDAO();
-            AccessTokenDO accessTokenDO = tokenMgtDAO.retrieveAccessToken(tokenResponse.getAuthorizationContextToken()
-                    .getTokenString(), false);
+            AccessTokenDO accessTokenDO = OAuth2Util.getAccessTokenDOfromTokenIdentifier(tokenResponse
+                    .getAuthorizationContextToken().getTokenString());
             ApplicationManagementService applicationMgtService = OAuth2ServiceComponentHolder.getApplicationMgtService();
-            String clientId = null;
+            String clientId;
             if (accessTokenDO != null) {
                 clientId = accessTokenDO.getConsumerKey();
+            } else {
+                // this means the token is not active so we can't proceed further
+                throw new UserInfoEndpointException(OAuthError.ResourceResponse.INVALID_TOKEN,
+                        "Invalid Access Token. Access token is not ACTIVE.");
             }
 
             OAuthAppDO oAuthAppDO = OAuth2Util.getAppInformationByClientId(clientId);
