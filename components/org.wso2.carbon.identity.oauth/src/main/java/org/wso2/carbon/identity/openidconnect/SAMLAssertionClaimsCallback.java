@@ -305,6 +305,9 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
                 .getUserStoreManager()).getSecondaryUserStoreManager(domain).getRealmConfiguration();
         String claimSeparator = realmConfiguration.getUserStoreProperty(
                 IdentityCoreConstants.MULTI_ATTRIBUTE_SEPARATOR);
+        if (StringUtils.isBlank(claimSeparator)) {
+            claimSeparator = IdentityCoreConstants.MULTI_ATTRIBUTE_SEPARATOR_DEFAULT;
+        }
 
         Map<String, String> spToLocalClaimMappings = ClaimMetadataHandler.getInstance()
                 .getMappingsMapFromOtherDialectToCarbon(SP_DIALECT, null, spTenantDomain, false);
