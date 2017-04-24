@@ -37,14 +37,6 @@ import org.wso2.carbon.identity.oauth2.model.AuthzCodeDO;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.apache.commons.codec.binary.Base64;
-
 /**
  * Implements the AuthorizationGrantHandler for the Grant Type : authorization_code.
  */
@@ -117,8 +109,10 @@ public class AuthorizationCodeGrantHandler extends AbstractAuthorizationGrantHan
             } else {
                 cacheKeyString = clientId + ":" + authorizedUser.toLowerCase() + ":" + scope;
             }
-            OAuthCacheKey cacheKey = new OAuthCacheKey(cacheKeyString);
-            oauthCache.clearCacheEntry(cacheKey);
+            if (cacheEnabled) {
+                OAuthCacheKey cacheKey = new OAuthCacheKey(cacheKeyString);
+                oauthCache.clearCacheEntry(cacheKey);
+            }
             if (log.isDebugEnabled()) {
                 log.debug("Invalid access token request with inactive authorization code for Client Id : " + clientId);
             }
@@ -179,11 +173,12 @@ public class AuthorizationCodeGrantHandler extends AbstractAuthorizationGrantHan
                         " issued for client " + clientId +
                         " was removed from the database.");
             }
-
-            // remove the authorization code from the cache
-            oauthCache.clearCacheEntry(new OAuthCacheKey(
-                    OAuth2Util.buildCacheKeyStringForAuthzCode(clientId,
-                            authorizationCode)));
+            if(cacheEnabled) {
+                // remove the authorization code from the cache
+                oauthCache.clearCacheEntry(new OAuthCacheKey(
+                        OAuth2Util.buildCacheKeyStringForAuthzCode(clientId,
+                                authorizationCode)));
+            }
 
             if (log.isDebugEnabled()) {
                 log.debug("Expired Authorization code" +
