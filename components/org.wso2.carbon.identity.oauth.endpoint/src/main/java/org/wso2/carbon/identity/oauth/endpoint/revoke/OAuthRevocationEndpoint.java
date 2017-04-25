@@ -94,10 +94,13 @@ public class OAuthRevocationEndpoint {
                     String[] clientCredentials = EndpointUtil
                             .extractCredentialsFromAuthzHeader(request.getHeader(OAuthConstants.HTTP_REQ_HEADER_AUTHZ));
 
-                    // The client MUST NOT use more than one authentication method in each request
+                    // The client MUST NOT use more than one authentication method in each request as per section
+                    // 2.3.  Client Authentication of 'The OAuth 2.0 Authorization Framework' spec and not accepting in
+                    // the request URI.
                     if (paramMap.containsKey(OAuth.OAUTH_CLIENT_ID) && paramMap
                             .containsKey(OAuth.OAUTH_CLIENT_SECRET)) {
-                        log.error("More than one authentication method used in the request.");
+                        log.error("Authorization header is already present. Client MUST NOT use more than one "
+                                + "authentication method in each request ");
                         return handleBasicAuthFailure(callback);
                     }
 
