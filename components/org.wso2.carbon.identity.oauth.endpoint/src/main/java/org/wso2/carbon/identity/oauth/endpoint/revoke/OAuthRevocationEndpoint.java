@@ -105,7 +105,8 @@ public class OAuthRevocationEndpoint {
                     }
 
                     if (clientCredentials.length != 2) {
-                        log.error("Client credentials are not properly set in the request.");
+                        log.error("Client credentials are not properly set in the request. "
+                                + "The Authorization header is invalid");
                         return handleBasicAuthFailure(callback);
                     }
 
