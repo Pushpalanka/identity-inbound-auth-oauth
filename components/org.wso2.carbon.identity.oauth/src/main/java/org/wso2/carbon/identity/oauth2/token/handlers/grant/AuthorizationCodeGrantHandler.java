@@ -157,7 +157,7 @@ public class AuthorizationCodeGrantHandler extends AbstractAuthorizationGrantHan
         long currentTimeInMillis = System.currentTimeMillis();
 
         // if authorization code is expired.
-        if ((currentTimeInMillis - timestampSkew) > (issuedTimeInMillis + validityPeriodInMillis)) {
+        if (OAuth2Util.calculateValidityInMillis(issuedTimeInMillis, validityPeriodInMillis) < 1000) {
             if (log.isDebugEnabled()) {
                 log.debug("Authorization Code is expired." +
                         " Issued Time(ms) : " + issuedTimeInMillis +

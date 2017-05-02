@@ -448,14 +448,16 @@ public class OAuth2Util {
         long currentTime = System.currentTimeMillis();
 
         //check the validity of cached OAuth2AccessToken Response
-        long skew = OAuthServerConfiguration.getInstance().getTimeStampSkewInSeconds() * 1000;
-        if (issuedTime + validityPeriodMillis - (currentTime + skew) > 1000) {
-            long refreshValidity = OAuthServerConfiguration.getInstance()
+        long accessTokenValidityMillis = calculateValidityInMillis(issuedTime,validityPeriodMillis);
+
+        if (accessTokenValidityMillis > 1000) {
+            long refreshValidityPeriodMillis = OAuthServerConfiguration.getInstance()
                     .getRefreshTokenValidityPeriodInSeconds() * 1000;
-            if (issuedTime + refreshValidity - currentTime + skew > 1000) {
+            long refreshTokenValidityMillis = calculateValidityInMillis(issuedTime, refreshValidityPeriodMillis);
+            if (refreshTokenValidityMillis > 1000) {
                 //Set new validity period to response object
-                accessTokenDO.setValidityPeriod((issuedTime + validityPeriodMillis - (currentTime + skew)) / 1000);
-                accessTokenDO.setValidityPeriodInMillis(issuedTime + validityPeriodMillis - (currentTime + skew));
+                accessTokenDO.setValidityPeriodInMillis(accessTokenValidityMillis);
+                accessTokenDO.setRefreshTokenValidityPeriodInMillis(refreshTokenValidityMillis);
                 //Set issued time period to response object
                 accessTokenDO.setIssuedTime(new Timestamp(currentTime));
                 return accessTokenDO;
@@ -568,21 +570,23 @@ public class OAuth2Util {
             throw new IllegalArgumentException("accessTokenDO is " + "\'NULL\'");
         }
 
-        long currentTime;
-        long validityPeriodMillis = accessTokenDO.getValidityPeriodInMillis();
+        long accessTokenValidityPeriodMillis = accessTokenDO.getValidityPeriodInMillis();
 
-        if(validityPeriodMillis < 0 && IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)){
+        if(accessTokenValidityPeriodMillis < 0 &&
+                IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)){
             log.debug("Access Token : " + accessTokenDO.getAccessToken() + " has infinite lifetime");
             return -1;
         }
 
-        long refreshTokenValidityPeriodMillis = accessTokenDO.getRefreshTokenValidityPeriodInMillis();
-        long issuedTime = accessTokenDO.getIssuedTime().getTime();
-        currentTime = System.currentTimeMillis();
+        // Calculate Refresh Token Validity
         long refreshTokenIssuedTime = accessTokenDO.getRefreshTokenIssuedTime().getTime();
-        long accessTokenValidity = issuedTime + validityPeriodMillis - (currentTime + timestampSkew);
-        long refreshTokenValidity = (refreshTokenIssuedTime + refreshTokenValidityPeriodMillis)
-                                    - (currentTime + timestampSkew);
+        long refreshTokenValidityPeriodMillis = accessTokenDO.getRefreshTokenValidityPeriodInMillis();
+        long refreshTokenValidity = calculateValidityInMillis(refreshTokenIssuedTime, refreshTokenValidityPeriodMillis);
+
+        // Calculate Access Token Validity
+        long accessTokenIssuedTime = accessTokenDO.getIssuedTime().getTime();
+        long accessTokenValidity = calculateValidityInMillis(accessTokenIssuedTime, accessTokenValidityPeriodMillis);
+
         if(accessTokenValidity > 1000 && refreshTokenValidity > 1000){
             return accessTokenValidity;
         }
@@ -595,7 +599,6 @@ public class OAuth2Util {
             throw new IllegalArgumentException("accessTokenDO is " + "\'NULL\'");
         }
 
-        long currentTime;
         long refreshTokenValidityPeriodMillis = accessTokenDO.getRefreshTokenValidityPeriodInMillis();
 
         if (refreshTokenValidityPeriodMillis < 0) {
@@ -603,10 +606,8 @@ public class OAuth2Util {
             return -1;
         }
 
-        currentTime = System.currentTimeMillis();
         long refreshTokenIssuedTime = accessTokenDO.getRefreshTokenIssuedTime().getTime();
-        long refreshTokenValidity = (refreshTokenIssuedTime + refreshTokenValidityPeriodMillis)
-                                    - (currentTime + timestampSkew);
+        long refreshTokenValidity = calculateValidityInMillis(refreshTokenIssuedTime, refreshTokenValidityPeriodMillis);
         if(refreshTokenValidity > 1000){
             return refreshTokenValidity;
         }
@@ -618,7 +619,6 @@ public class OAuth2Util {
         if(accessTokenDO == null){
             throw new IllegalArgumentException("accessTokenDO is " + "\'NULL\'");
         }
-        long currentTime;
         long validityPeriodMillis = accessTokenDO.getValidityPeriodInMillis();
 
         if (validityPeriodMillis < 0) {
@@ -627,13 +627,24 @@ public class OAuth2Util {
         }
 
         long issuedTime = accessTokenDO.getIssuedTime().getTime();
-        currentTime = System.currentTimeMillis();
-        long validityMillis = issuedTime + validityPeriodMillis - (currentTime - timestampSkew);
+        long validityMillis = calculateValidityInMillis(issuedTime, validityPeriodMillis);
         if (validityMillis > 1000) {
             return validityMillis;
         } else {
             return 0;
         }
+    }
+
+    /**
+     * Util method to calculate the validity period after applying skew corrections.
+     *
+     * @param issuedTimeInMillis
+     * @param validityPeriodMillis
+     * @return skew corrected validity period in milliseconds
+     */
+    public static long calculateValidityInMillis(long issuedTimeInMillis, long validityPeriodMillis) {
+
+        return issuedTimeInMillis + validityPeriodMillis - (System.currentTimeMillis() - timestampSkew);
     }
 
     public static int getTenantId(String tenantDomain) throws IdentityOAuth2Exception {

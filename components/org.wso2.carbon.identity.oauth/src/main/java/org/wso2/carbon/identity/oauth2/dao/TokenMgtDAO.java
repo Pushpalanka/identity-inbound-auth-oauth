@@ -1281,14 +1281,12 @@ public class TokenMgtDAO {
             }
 
             while (rs.next()){
-                int validityPeriod = rs.getInt(3);
+                long validityPeriodInMillis = rs.getLong(3);
                 Timestamp timeCreated = rs.getTimestamp(2);
                 long issuedTimeInMillis = timeCreated.getTime();
-                long validityPeriodInMillis = validityPeriod;
-                long timestampSkew = OAuthServerConfiguration.getInstance().getTimeStampSkewInSeconds() * 1000;
 
                 // if authorization code is not expired.
-                if ((currentTimeInMillis - timestampSkew) < (issuedTimeInMillis + validityPeriodInMillis)) {
+                if (OAuth2Util.calculateValidityInMillis(issuedTimeInMillis, validityPeriodInMillis) >= 1000) {
                     authorizationCodes.add(persistenceProcessor.getPreprocessedAuthzCode(rs.getString(1)));
                 }
             }
