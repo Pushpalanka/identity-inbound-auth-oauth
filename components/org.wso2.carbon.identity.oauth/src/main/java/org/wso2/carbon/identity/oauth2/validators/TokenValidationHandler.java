@@ -393,7 +393,7 @@ public class TokenValidationHandler {
 
         // There is no token validator for the provided token type.
         if (tokenValidator == null) {
-            throw new IdentityOAuth2Exception("Unsupported access token type: " + accessToken.getTokenType());
+            throw new IllegalArgumentException("Unsupported access token type: " + accessToken.getTokenType());
         }
 
         return tokenValidator;
