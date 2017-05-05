@@ -185,6 +185,10 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
                         if (StringUtils.isBlank(subject)) {
                             subject = request.getAuthorizedUser().getAuthenticatedSubjectIdentifier();
                         }
+                        if (serviceProvider.getLocalAndOutBoundAuthenticationConfig().
+                                isUseTenantDomainInLocalSubjectIdentifier()) {
+                            subject = subject + "@" + tenantDomain;
+                        }
                     } catch (IdentityException e) {
                         String error = "Error occurred while getting user claim for user " + request
                                 .getAuthorizedUser().toString() + ", claim " + claim;
