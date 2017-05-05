@@ -408,7 +408,7 @@ public class OAuthServerConfiguration {
         if (supportedGrantTypes == null) {
             synchronized (this) {
                 if (supportedGrantTypes == null) {
-                    Map<String, AuthorizationGrantHandler> supportedGrantTypesTemp = new Hashtable<>();
+                    Map<String, AuthorizationGrantHandler> supportedGrantTypesTemp = new HashMap<>();
                     for (Map.Entry<String, String> entry : supportedGrantTypeClassNames.entrySet()) {
                         AuthorizationGrantHandler authzGrantHandler = null;
                         try {
@@ -423,9 +423,15 @@ public class OAuthServerConfiguration {
                         } catch (IdentityOAuth2Exception e) {
                             log.error("Error while initializing " + entry.getValue(), e);
                         }
-                        supportedGrantTypesTemp.put(entry.getKey(), authzGrantHandler);
-                        supportedGrantTypes = supportedGrantTypesTemp;
+
+                        if (authzGrantHandler != null) {
+                            supportedGrantTypesTemp.put(entry.getKey(), authzGrantHandler);
+                        } else {
+                            log.warn("Grant type : " + entry.getKey() + ", is not added as a supported grant type. "
+                                    + "Relevant grant handler failed to initiate properly.");
+                        }
                     }
+                    supportedGrantTypes = supportedGrantTypesTemp;
                 }
             }
         }
