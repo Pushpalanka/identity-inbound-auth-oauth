@@ -185,8 +185,7 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
                         if (StringUtils.isBlank(subject)) {
                             subject = request.getAuthorizedUser().getAuthenticatedSubjectIdentifier();
                         }
-                        if (serviceProvider.getLocalAndOutBoundAuthenticationConfig().
-                                isUseTenantDomainInLocalSubjectIdentifier()) {
+                        if (serviceProvider.getLocalAndOutBoundAuthenticationConfig().isUseTenantDomainInLocalSubjectIdentifier()) {
                             subject = subject + "@" + tenantDomain;
                         }
                     } catch (IdentityException e) {
