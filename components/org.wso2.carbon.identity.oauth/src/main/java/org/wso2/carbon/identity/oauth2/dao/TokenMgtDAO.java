@@ -442,7 +442,8 @@ public class TokenMgtDAO {
             if (StringUtils.isNotEmpty(userStoreDomain) &&
                     !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
                 //logic to store access token into different tables when multiple user stores are configured.
-                sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
+                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN + "_" +
+                        userStoreDomain);
             }
             if (!isUsernameCaseSensitive) {
                 sql = sql.replace(AUTHZ_USER, LOWER_AUTHZ_USER);
@@ -551,7 +552,8 @@ public class TokenMgtDAO {
             }
             if (StringUtils.isNotEmpty(userStoreDomain) &&
                     !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-                sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
+                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN + "_" +
+                        userStoreDomain);
             }
             if (!isUsernameCaseSensitive) {
                 sql = sql.replace(AUTHZ_USER, LOWER_AUTHZ_USER);
@@ -957,7 +959,8 @@ public class TokenMgtDAO {
 
             if (StringUtils.isNotBlank(userStoreDomain) &&
                     !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-                sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
+                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN + "_" +
+                        userStoreDomain);
             }
 
             prepStmt = connection.prepareStatement(sql);
@@ -1040,8 +1043,8 @@ public class TokenMgtDAO {
             String sql = SQLQueries.UPDATE_TOKE_STATE;
             if (StringUtils.isNotBlank(userStoreDomain) &&
                     !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-                sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
-            }
+                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN + "_" +
+                        userStoreDomain);            }
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setString(1, tokenState);
             prepStmt.setString(2, tokenStateId);
@@ -1140,7 +1143,6 @@ public class TokenMgtDAO {
                 if (log.isDebugEnabled()) {
                     log.debug("Number of rows being updated : " + count);
                 }
-                IdentityDatabaseUtil.closeAllConnections(connection, null, ps);
             }
 
             connection.commit();
@@ -2349,7 +2351,8 @@ public class TokenMgtDAO {
             if (StringUtils.isNotEmpty(userStoreDomain) &&
                     !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
                 //logic to store access token into different tables when multiple user stores are configured.
-                sql = sql.replace(IDN_OAUTH2_ACCESS_TOKEN, IDN_OAUTH2_ACCESS_TOKEN + "_" + userStoreDomain);
+                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN + "_" +
+                        userStoreDomain);
             }
             if (!isUsernameCaseSensitive) {
                 sql = sql.replace(AUTHZ_USER, LOWER_AUTHZ_USER);
