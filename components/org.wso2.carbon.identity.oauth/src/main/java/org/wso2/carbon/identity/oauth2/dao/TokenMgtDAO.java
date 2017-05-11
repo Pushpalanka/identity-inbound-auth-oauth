@@ -20,6 +20,7 @@ package org.wso2.carbon.identity.oauth2.dao;
 
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
@@ -1485,6 +1486,10 @@ public class TokenMgtDAO {
         return distinctConsumerKeys;
     }
 
+    /**
+     * Do not use this method. Use findTenantAndScopeOfResource(String resourceUri) instead.
+     */
+    @Deprecated
     public String findScopeOfResource(String resourceUri) throws IdentityOAuth2Exception {
 
         Connection connection = IdentityDatabaseUtil.getDBConnection();
@@ -1505,6 +1510,41 @@ public class TokenMgtDAO {
             return null;
         } catch (SQLException e) {
             String errorMsg = "Error getting scopes for resource - " + resourceUri + " : " + e.getMessage();
+            throw new IdentityOAuth2Exception(errorMsg, e);
+        } finally {
+            IdentityDatabaseUtil.closeAllConnections(connection, rs, ps);
+        }
+    }
+
+    /**
+     * This method is to get resource scope key and tenant id of the resource uri
+     *
+     * @param resourceUri Resource Path
+     * @return Pair which contains resource scope key and the tenant id
+     * @throws IdentityOAuth2Exception if failed to find the tenant and resource scope
+     */
+    public Pair<String, Integer> findTenantAndScopeOfResource(String resourceUri) throws IdentityOAuth2Exception {
+
+        Connection connection = IdentityDatabaseUtil.getDBConnection();
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+
+        try {
+            String sql = SQLQueries.RETRIEVE_IOS_SCOPE_KEY_WITH_TENANT;
+
+            ps = connection.prepareStatement(sql);
+            ps.setString(1, resourceUri);
+            rs = ps.executeQuery();
+
+            if (rs.next()) {
+                String scopeKey = rs.getString("SCOPE_KEY");
+                int tenantId = rs.getInt("TENANT_ID");
+                return Pair.of(scopeKey, tenantId);
+            }
+            connection.commit();
+            return null;
+        } catch (SQLException e) {
+            String errorMsg = "Error getting scopes for resource - " + resourceUri;
             throw new IdentityOAuth2Exception(errorMsg, e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, rs, ps);
@@ -2076,16 +2116,18 @@ public class TokenMgtDAO {
     }
 
     /**
+     * Do not use this method. Use getRolesOfScopeByScopeKey(String scopeKey, int tenantId) instead.
      * Get the list of roles associated for a given scope.
      *
-     * @param scopeKey - The Scope Key.
-     * @return - The Set of roles associated with the given scope.
-     * @throws IdentityOAuth2Exception - If an SQL error occurs while retrieving the roles.
+     * @param scopeKey The Scope Key.
+     * @return The Set of roles associated with the given scope.
+     * @throws IdentityOAuth2Exception If an SQL error occurs while retrieving the roles.
      */
+    @Deprecated
     public Set<String> getRolesOfScopeByScopeKey(String scopeKey) throws IdentityOAuth2Exception {
 
         Connection connection = IdentityDatabaseUtil.getDBConnection();
-        ;
+
         PreparedStatement ps = null;
         ResultSet rs = null;
         Set<String> roles = null;
@@ -2106,7 +2148,47 @@ public class TokenMgtDAO {
             connection.commit();
             return roles;
         } catch (SQLException e) {
-            String errorMsg = "Error getting roles of scope - " + scopeKey + " : " + e.getMessage();
+            String errorMsg = "Error getting roles of scope - " + scopeKey;
+            throw new IdentityOAuth2Exception(errorMsg, e);
+        } finally {
+            IdentityDatabaseUtil.closeAllConnections(connection, rs, ps);
+        }
+    }
+
+    /**
+     * Get the list of roles associated for a given scope.
+     *
+     * @param scopeKey The Scope Key.
+     * @param tenantId Tenant Id
+     * @return The Set of roles associated with the given scope.
+     * @throws IdentityOAuth2Exception - If an SQL error occurs while retrieving the roles.
+     */
+    public Set<String> getRolesOfScopeByScopeKey(String scopeKey, int tenantId) throws IdentityOAuth2Exception {
+
+        Connection connection = IdentityDatabaseUtil.getDBConnection();
+
+        PreparedStatement ps = null;
+        ResultSet rs = null;
+        Set<String> roles = null;
+
+        try {
+            String sql = SQLQueries.RETRIEVE_ROLES_OF_SCOPE_FOR_TENANT;
+
+            ps = connection.prepareStatement(sql);
+            ps.setString(1, scopeKey);
+            ps.setInt(2, tenantId);
+            rs = ps.executeQuery();
+
+            if (rs.next()) {
+                String rolesString = rs.getString("ROLES");
+                if (!rolesString.isEmpty()) {
+                    roles = new HashSet<>(new ArrayList<>(Arrays.asList(rolesString.replaceAll(" ", "").split(","))));
+                }
+            }
+            connection.commit();
+            return roles;
+        } catch (SQLException e) {
+            String errorMsg = "Error getting roles of scope - " + scopeKey;
             throw new IdentityOAuth2Exception(errorMsg, e);
         } finally {
             IdentityDatabaseUtil.closeAllConnections(connection, rs, ps);
