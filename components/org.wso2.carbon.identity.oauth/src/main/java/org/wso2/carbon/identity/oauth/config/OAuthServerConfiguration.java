@@ -165,6 +165,9 @@ public class OAuthServerConfiguration {
     // property added to fix IDENTITY-4534 in backward compatible manner
     private boolean isImplicitErrorFragment = true;
 
+    // property added to fix IDENTITY-4112 in backward compatible manner
+    private boolean isRevokeResponseHeadersEnabled = true;
+
     private OAuthServerConfiguration() {
         buildOAuthServerConfiguration();
     }
@@ -257,6 +260,8 @@ public class OAuthServerConfiguration {
 
         // parse identity OAuth 2.0 token generator
         parseOAuthTokenIssuerConfig(oauthElem);
+
+        parseRevokeResponseHeadersEnableConfig(oauthElem);
     }
 
     public Set<OAuthCallbackHandlerMetaData> getCallbackHandlerMetaData() {
@@ -819,6 +824,10 @@ public class OAuthServerConfiguration {
 
     public boolean isImplicitErrorFragment() {
         return isImplicitErrorFragment;
+    }
+
+    public boolean isRevokeResponseHeadersEnabled() {
+        return isRevokeResponseHeadersEnabled;
     }
 
     private void parseOAuthCallbackHandlers(OMElement callbackHandlersElem) {
@@ -1483,6 +1492,18 @@ public class OAuthServerConfiguration {
         }
     }
 
+    private void parseRevokeResponseHeadersEnableConfig(OMElement oauthConfigElem) {
+        OMElement enableRevokeResponseHeadersElem =
+                oauthConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.ENABLE_REVOKE_RESPONSE_HEADERS));
+        if (enableRevokeResponseHeadersElem != null) {
+            isRevokeResponseHeadersEnabled = Boolean.parseBoolean(enableRevokeResponseHeadersElem.getText());
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug("Enable revoke response headers : " + isRevokeResponseHeadersEnabled);
+        }
+    }
+
     private void parseOpenIDConnectConfig(OMElement oauthConfigElem) {
 
         OMElement openIDConnectConfigElem =
@@ -1685,6 +1706,8 @@ public class OAuthServerConfiguration {
         private static final String SAML2_GRANT = "SAML2Grant";
         private static final String SAML2_TOKEN_HANDLER = "SAML2TokenHandler";
 
+        // To enable revoke response headers
+        private static final String ENABLE_REVOKE_RESPONSE_HEADERS = "EnableRevokeResponseHeaders";
     }
 
 }
