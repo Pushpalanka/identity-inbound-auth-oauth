@@ -199,11 +199,18 @@ public class OAuthServerConfiguration {
         parseTokenValidators(oauthElem.getFirstChildWithName(
                 getQNameWithIdentityNS(ConfigElements.TOKEN_VALIDATORS)));
 
-        // Get the configured scope validator
+        // Get the configured jdbc scope validator
         OMElement scopeValidatorElem = oauthElem.getFirstChildWithName(
                 getQNameWithIdentityNS(ConfigElements.SCOPE_VALIDATOR));
+
+        //Get the configured scope validators
+        OMElement scopeValidatorsElem = oauthElem.getFirstChildWithName(
+                getQNameWithIdentityNS(ConfigElements.SCOPE_VALIDATORS));
+
         if (scopeValidatorElem != null) {
             parseScopeValidator(scopeValidatorElem);
+        } else if (scopeValidatorsElem != null) {
+            parseScopeValidator(scopeValidatorsElem);
         }
 
         // read default timeout periods
@@ -869,10 +876,21 @@ public class OAuthServerConfiguration {
     }
 
     private void parseScopeValidator(OMElement scopeValidatorElem) {
+        String scopeValidatorClazz = null;
+        String scopesToSkipAttr = null;
 
-        String scopeValidatorClazz = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
-
-        String scopesToSkipAttr = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SKIP_SCOPE_ATTR));
+        if (StringUtils.isNotBlank(scopeValidatorElem.getLocalName()) && scopeValidatorElem.getLocalName().trim().
+                                equals(ConfigElements.SCOPE_VALIDATORS)){
+            if (scopeValidatorElem.getFirstChildWithName
+                    (getQNameWithIdentityNS(ConfigElements.OIDC_SCOPE_VALIDATOR)) != null) {
+                scopeValidatorClazz =
+                        scopeValidatorElem.getFirstChildWithName(getQNameWithIdentityNS
+                                (ConfigElements.OIDC_SCOPE_VALIDATOR)).getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
+            }
+        }else {
+            scopeValidatorClazz = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
+            scopesToSkipAttr = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SKIP_SCOPE_ATTR));
+        }
         try {
             Class clazz = Thread.currentThread().getContextClassLoader().loadClass(scopeValidatorClazz);
             OAuth2ScopeValidator scopeValidator = (OAuth2ScopeValidator) clazz.newInstance();
@@ -1640,6 +1658,8 @@ public class OAuthServerConfiguration {
         private static final String TOKEN_TYPE_ATTR = "type";
         private static final String TOKEN_CLASS_ATTR = "class";
         private static final String SCOPE_VALIDATOR = "OAuthScopeValidator";
+        private static final String SCOPE_VALIDATORS = "ScopeValidators";
+        private static final String OIDC_SCOPE_VALIDATOR = "OIDCScopeValidator";
         private static final String SCOPE_CLASS_ATTR = "class";
         private static final String SKIP_SCOPE_ATTR = "scopesToSkip";
         private static final String IMPLICIT_ERROR_FRAGMENT = "ImplicitErrorFragment";
