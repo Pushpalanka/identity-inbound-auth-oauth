@@ -880,14 +880,14 @@ public class OAuthServerConfiguration {
         String scopesToSkipAttr = null;
 
         if (StringUtils.isNotBlank(scopeValidatorElem.getLocalName()) && scopeValidatorElem.getLocalName().trim().
-                                equals(ConfigElements.SCOPE_VALIDATORS)){
+                equals(ConfigElements.SCOPE_VALIDATORS)) {
             if (scopeValidatorElem.getFirstChildWithName
                     (getQNameWithIdentityNS(ConfigElements.OIDC_SCOPE_VALIDATOR)) != null) {
                 scopeValidatorClazz =
                         scopeValidatorElem.getFirstChildWithName(getQNameWithIdentityNS
                                 (ConfigElements.OIDC_SCOPE_VALIDATOR)).getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
             }
-        }else {
+        } else {
             scopeValidatorClazz = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
             scopesToSkipAttr = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SKIP_SCOPE_ATTR));
         }
