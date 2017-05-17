@@ -1125,7 +1125,12 @@ public class OAuth2Util {
     public static OAuthAppDO getAppInformationByClientId(String clientId)
             throws IdentityOAuth2Exception, InvalidOAuthClientException {
 
-        OAuthAppDO oAuthAppDO = AppInfoCache.getInstance().getValueFromCache(clientId);
+        OAuthAppDO oAuthAppDO = null;
+
+        if (OAuthServerConfiguration.getInstance().isCacheEnabled()) {
+            oAuthAppDO = AppInfoCache.getInstance().getValueFromCache(clientId);
+        }
+
         if (oAuthAppDO != null) {
             return oAuthAppDO;
         } else {
