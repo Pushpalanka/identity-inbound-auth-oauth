@@ -76,7 +76,7 @@ public class OIDCScopeValidator extends OAuth2ScopeValidator {
                     }
                 }
             }
-            return false;
+            return true;
 
         } else {
             return false;
