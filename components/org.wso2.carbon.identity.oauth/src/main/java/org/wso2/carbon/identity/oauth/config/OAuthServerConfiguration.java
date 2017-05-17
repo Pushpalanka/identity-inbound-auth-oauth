@@ -122,6 +122,7 @@ public class OAuthServerConfiguration {
     private TokenPersistenceProcessor persistenceProcessor = null;
     private Set<OAuthCallbackHandlerMetaData> callbackHandlerMetaData = new HashSet<>();
     private Map<String, String> supportedGrantTypeClassNames = new HashMap<>();
+    private Map<String, String> idTokenAllowedMap = new HashMap<>();
     private Map<String, AuthorizationGrantHandler> supportedGrantTypes;
     private Map<String, String> supportedGrantTypeValidatorNames = new HashMap<>();
     private Map<String, Class<? extends OAuthValidator<HttpServletRequest>>> supportedGrantTypeValidators;
@@ -641,6 +642,10 @@ public class OAuthServerConfiguration {
 
     public Map<String, String> getTokenValidatorClassNames() {
         return tokenValidatorClassNames;
+    }
+
+    public Map<String, String> getIdTokenAllowedMap() {
+        return idTokenAllowedMap;
     }
 
     public boolean isAccessTokenPartitioningEnabled() {
@@ -1265,6 +1270,17 @@ public class OAuthServerConfiguration {
                     authzGrantHandlerImplClass = authzGrantHandlerClassNameElement.getText();
                 }
 
+                OMElement idTokenAllowedElement = supportedGrantTypeElement
+                        .getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.ID_TOKEN_ALLOWED));
+                String idTokenAllowed = null;
+                if (idTokenAllowedElement != null) {
+                    idTokenAllowed = idTokenAllowedElement.getText();
+                }
+
+                if (!StringUtils.isEmpty(grantTypeName) && !StringUtils.isEmpty(idTokenAllowed)) {
+                    idTokenAllowedMap.put(grantTypeName, idTokenAllowed);
+                }
+
                 if (!StringUtils.isEmpty(grantTypeName) && !StringUtils.isEmpty(authzGrantHandlerImplClass)) {
                     supportedGrantTypeClassNames.put(grantTypeName, authzGrantHandlerImplClass);
 
@@ -1688,6 +1704,7 @@ public class OAuthServerConfiguration {
         private static final String GRANT_TYPE_HANDLER_IMPL_CLASS = "GrantTypeHandlerImplClass";
         private static final String GRANT_TYPE_VALIDATOR_IMPL_CLASS = "GrantTypeValidatorImplClass";
         private static final String RESPONSE_TYPE_VALIDATOR_IMPL_CLASS = "ResponseTypeValidatorImplClass";
+        private static final String ID_TOKEN_ALLOWED = "IdTokenAllowed";
         // Supported Client Authentication Methods
         private static final String CLIENT_AUTH_HANDLERS = "ClientAuthHandlers";
         private static final String CLIENT_AUTH_HANDLER_IMPL_CLASS = "ClientAuthHandler";

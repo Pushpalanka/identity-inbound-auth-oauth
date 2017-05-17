@@ -24,6 +24,10 @@ import org.wso2.carbon.identity.oauth2.dto.OAuth2TokenValidationRequestDTO;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Default OAuth2 access token validator that supports "bearer" token type.
  * However this validator does not validate scopes or access delegation.
@@ -49,8 +53,22 @@ public class DefaultOAuth2TokenValidator implements OAuth2TokenValidator {
         if (scopeValidator != null && scopeValidator.getClass() != null && messageContext.getRequestDTO() != null) {
             //if OIDC scope validator is engaged through the configuration
             if (scopeValidator.getClass().getName().equals(OIDC_SCOPE_VALIDATOR_CLASS)) {
-                return scopeValidator.validateScope((AccessTokenDO) messageContext.getProperty(ACCESS_TOKEN_DO),
-                        null);
+                ArrayList<String> idTokenAllowedGrantTypesList = new ArrayList();
+                Map<String, String> idTokenAllowedGrantTypesMap = OAuthServerConfiguration.getInstance().getIdTokenAllowedMap();
+                if (!idTokenAllowedGrantTypesMap.isEmpty()) {
+                    for (Map.Entry<String, String> entry : idTokenAllowedGrantTypesMap.entrySet()) {
+                        if (entry.getValue().equals("true")) {
+                            idTokenAllowedGrantTypesList.add(entry.getKey());
+                        }
+                    }
+                }
+                if (!idTokenAllowedGrantTypesList.isEmpty()) {
+                    return scopeValidator.validateScope((AccessTokenDO) messageContext.getProperty(ACCESS_TOKEN_DO),
+                            idTokenAllowedGrantTypesList.toString());
+                } else {
+                    return scopeValidator.validateScope((AccessTokenDO) messageContext.getProperty(ACCESS_TOKEN_DO),
+                            null);
+                }
             }
             //If any other scope validator is engaged through the configuration
             else {

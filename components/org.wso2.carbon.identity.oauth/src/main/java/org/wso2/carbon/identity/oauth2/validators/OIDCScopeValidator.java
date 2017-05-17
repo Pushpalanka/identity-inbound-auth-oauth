@@ -18,6 +18,7 @@
 
 package org.wso2.carbon.identity.oauth2.validators;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.common.message.types.GrantType;
@@ -57,26 +58,40 @@ public class OIDCScopeValidator extends OAuth2ScopeValidator {
     Log log = LogFactory.getLog(OIDCScopeValidator.class);
 
     @Override
-    public boolean validateScope(AccessTokenDO accessTokenDO, String resource) throws IdentityOAuth2Exception {
+    public boolean validateScope(AccessTokenDO accessTokenDO, String idTokenAllowedGrantTypes) throws IdentityOAuth2Exception {
 
         //Get the list of scopes associated with the access token
         String[] scopes = accessTokenDO.getScope();
-
         //If no scopes are associated with the token
         if (scopes != null || scopes.length > 0) {
+            String granTypeValue = accessTokenDO.getGrantType();
+            List<String> idTokenAllowedGrantList = new ArrayList<>();
             for (String scope : scopes) {
                 if (scope.trim().equals(OAuthConstants.Scope.OPENID)) {
-                    String granTypeValue = accessTokenDO.getGrantType();
-                    if (granTypeValue.equals(GrantType.AUTHORIZATION_CODE.toString()) || granTypeValue.equals(GrantType.
-                            CLIENT_CREDENTIALS.toString()) || granTypeValue.equals(GrantType.PASSWORD.toString())) {
+                    //validating the authorization_code grant type with open id scope ignoring the IdTokenAllowed element
+                    // defined in the identity.xml
+                    if (granTypeValue.equals(GrantType.AUTHORIZATION_CODE.toString())) {
                         return true;
-
+                    }
+                    if (StringUtils.isNotBlank(idTokenAllowedGrantTypes)) {
+                        idTokenAllowedGrantList = Arrays.asList(idTokenAllowedGrantTypes.substring(1,
+                                idTokenAllowedGrantTypes.length() - 1).split(", "));
+                    }
+                    if (!idTokenAllowedGrantList.isEmpty() && idTokenAllowedGrantList.contains(granTypeValue)) {
+                        return true;
                     } else {
+                        if (log.isDebugEnabled()) {
+                            log.debug("SupportedGrantTypes or IdTokenAllowed element is not defined in the identity.xml.");
+                        }
                         return false;
                     }
                 }
+                return true;
             }
-            return true;
+            if (log.isDebugEnabled()) {
+                log.debug("There is no any requested scope.");
+            }
+            return false;
 
         } else {
             return false;
