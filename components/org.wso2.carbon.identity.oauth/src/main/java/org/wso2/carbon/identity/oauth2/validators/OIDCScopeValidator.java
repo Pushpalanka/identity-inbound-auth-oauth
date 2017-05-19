@@ -57,6 +57,15 @@ public class OIDCScopeValidator extends OAuth2ScopeValidator {
 
     Log log = LogFactory.getLog(OIDCScopeValidator.class);
 
+    /**
+     * returns whether the grant types are validated with "openid" scope.
+     *
+     * @param accessTokenDO - The access token data object
+     * @param idTokenAllowedGrantTypes grant types
+     * @return true if the grant type is valid
+     * @throws IdentityOAuth2Exception
+     */
+
     @Override
     public boolean validateScope(AccessTokenDO accessTokenDO, String idTokenAllowedGrantTypes) throws IdentityOAuth2Exception {
 
