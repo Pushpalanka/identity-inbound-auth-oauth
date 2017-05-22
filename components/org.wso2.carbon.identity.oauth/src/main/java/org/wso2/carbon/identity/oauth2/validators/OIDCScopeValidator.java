@@ -51,17 +51,17 @@ import java.util.Set;
 
 /**
  * The OIDC Scope Validation implementation. This validates "openid" scope with authorization_code, password and
- * client_credential grant types
+ * client_credential grant types.
  */
 public class OIDCScopeValidator extends OAuth2ScopeValidator {
 
-    Log log = LogFactory.getLog(OIDCScopeValidator.class);
+    private static Log log = LogFactory.getLog(OIDCScopeValidator.class);
 
     /**
-     * returns whether the grant types are validated with "openid" scope.
+     * Returns whether the grant types are validated with "openid" scope.
      *
      * @param accessTokenDO - The access token data object
-     * @param idTokenAllowedGrantTypes grant types
+     * @param idTokenAllowedGrantTypes grant types expected sample value "[implicit,password]"
      * @return true if the grant type is valid
      * @throws IdentityOAuth2Exception
      */
@@ -71,22 +71,24 @@ public class OIDCScopeValidator extends OAuth2ScopeValidator {
 
         //Get the list of scopes associated with the access token
         String[] scopes = accessTokenDO.getScope();
+        List<String> idTokenAllowedGrantList = new ArrayList<>();
+        if (StringUtils.isNotBlank(idTokenAllowedGrantTypes)) {
+            idTokenAllowedGrantList = Arrays.asList(idTokenAllowedGrantTypes.substring(1,
+                    idTokenAllowedGrantTypes.length() - 1).split(", "));
+        }
         //If no scopes are associated with the token
         if (scopes != null || scopes.length > 0) {
-            String granTypeValue = accessTokenDO.getGrantType();
-            List<String> idTokenAllowedGrantList = new ArrayList<>();
+            String grantTypeValue = accessTokenDO.getGrantType();
+
             for (String scope : scopes) {
                 if (scope.trim().equals(OAuthConstants.Scope.OPENID)) {
                     //validating the authorization_code grant type with open id scope ignoring the IdTokenAllowed element
                     // defined in the identity.xml
-                    if (granTypeValue.equals(GrantType.AUTHORIZATION_CODE.toString())) {
+                    if (GrantType.AUTHORIZATION_CODE.toString().equals(grantTypeValue)) {
                         return true;
                     }
-                    if (StringUtils.isNotBlank(idTokenAllowedGrantTypes)) {
-                        idTokenAllowedGrantList = Arrays.asList(idTokenAllowedGrantTypes.substring(1,
-                                idTokenAllowedGrantTypes.length() - 1).split(", "));
-                    }
-                    if (!idTokenAllowedGrantList.isEmpty() && idTokenAllowedGrantList.contains(granTypeValue)) {
+                    //if id token is allowed for requested grant type
+                    if (idTokenAllowedGrantList.contains(grantTypeValue)) {
                         return true;
                     } else {
                         if (log.isDebugEnabled()) {
@@ -98,7 +100,7 @@ public class OIDCScopeValidator extends OAuth2ScopeValidator {
                 return true;
             }
             if (log.isDebugEnabled()) {
-                log.debug("There is no any requested scope.");
+                log.debug("No requested scope is defined in accessTokenDO.");
             }
             return false;
 

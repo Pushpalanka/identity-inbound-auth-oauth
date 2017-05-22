@@ -122,7 +122,7 @@ public class OAuthServerConfiguration {
     private TokenPersistenceProcessor persistenceProcessor = null;
     private Set<OAuthCallbackHandlerMetaData> callbackHandlerMetaData = new HashSet<>();
     private Map<String, String> supportedGrantTypeClassNames = new HashMap<>();
-    private Map<String, String> idTokenAllowedMap = new HashMap<>();
+    private Map<String, String> idTokenAllowedForGrantTypesMap = new HashMap<>();
     private Map<String, AuthorizationGrantHandler> supportedGrantTypes;
     private Map<String, String> supportedGrantTypeValidatorNames = new HashMap<>();
     private Map<String, Class<? extends OAuthValidator<HttpServletRequest>>> supportedGrantTypeValidators;
@@ -644,8 +644,8 @@ public class OAuthServerConfiguration {
         return tokenValidatorClassNames;
     }
 
-    public Map<String, String> getIdTokenAllowedMap() {
-        return idTokenAllowedMap;
+    public Map<String, String> getIdTokenAllowedForGrantTypesMap() {
+        return idTokenAllowedForGrantTypesMap;
     }
 
     public boolean isAccessTokenPartitioningEnabled() {
@@ -884,8 +884,7 @@ public class OAuthServerConfiguration {
         String scopeValidatorClazz = null;
         String scopesToSkipAttr = null;
 
-        if (StringUtils.isNotBlank(scopeValidatorElem.getLocalName()) && scopeValidatorElem.getLocalName().trim().
-                equals(ConfigElements.SCOPE_VALIDATORS)) {
+        if (scopeValidatorElem.getLocalName().equals(ConfigElements.SCOPE_VALIDATORS)) {
             if (scopeValidatorElem.getFirstChildWithName
                     (getQNameWithIdentityNS(ConfigElements.OIDC_SCOPE_VALIDATOR)) != null) {
                 scopeValidatorClazz =
@@ -1277,11 +1276,11 @@ public class OAuthServerConfiguration {
                     idTokenAllowed = idTokenAllowedElement.getText();
                 }
 
-                if (!StringUtils.isEmpty(grantTypeName) && !StringUtils.isEmpty(idTokenAllowed)) {
-                    idTokenAllowedMap.put(grantTypeName, idTokenAllowed);
+                if (StringUtils.isNotEmpty(grantTypeName) && StringUtils.isNotEmpty(idTokenAllowed)) {
+                    idTokenAllowedForGrantTypesMap.put(grantTypeName, idTokenAllowed);
                 }
 
-                if (!StringUtils.isEmpty(grantTypeName) && !StringUtils.isEmpty(authzGrantHandlerImplClass)) {
+                if (StringUtils.isNotEmpty(grantTypeName) && StringUtils.isNotEmpty(authzGrantHandlerImplClass)) {
                     supportedGrantTypeClassNames.put(grantTypeName, authzGrantHandlerImplClass);
 
                     OMElement authzGrantValidatorClassNameElement = supportedGrantTypeElement.getFirstChildWithName(
@@ -1292,7 +1291,7 @@ public class OAuthServerConfiguration {
                         authzGrantValidatorImplClass = authzGrantValidatorClassNameElement.getText();
                     }
 
-                    if (!StringUtils.isEmpty(authzGrantValidatorImplClass)) {
+                    if (StringUtils.isNotEmpty(authzGrantValidatorImplClass)) {
                         supportedGrantTypeValidatorNames.put(grantTypeName, authzGrantValidatorImplClass);
                     }
                 }
