@@ -890,6 +890,9 @@ public class OAuthServerConfiguration {
                 scopeValidatorClazz =
                         scopeValidatorElem.getFirstChildWithName(getQNameWithIdentityNS
                                 (ConfigElements.OIDC_SCOPE_VALIDATOR)).getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
+            } else {
+                scopeValidatorClazz = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
+                scopesToSkipAttr = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SKIP_SCOPE_ATTR));
             }
         } else {
             scopeValidatorClazz = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
