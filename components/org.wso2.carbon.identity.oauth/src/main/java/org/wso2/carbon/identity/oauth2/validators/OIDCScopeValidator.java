@@ -92,7 +92,7 @@ public class OIDCScopeValidator extends OAuth2ScopeValidator {
                         return true;
                     } else {
                         if (log.isDebugEnabled()) {
-                            log.debug("SupportedGrantTypes or IdTokenAllowed element is not defined in the identity.xml.");
+                            log.debug("Id Token is not allowed for requested grant type.");
                         }
                         return false;
                     }
