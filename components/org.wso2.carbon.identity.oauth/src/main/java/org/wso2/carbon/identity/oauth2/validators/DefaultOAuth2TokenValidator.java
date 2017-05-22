@@ -35,7 +35,7 @@ import java.util.Map;
 public class DefaultOAuth2TokenValidator implements OAuth2TokenValidator {
 
     public static final String TOKEN_TYPE = "bearer";
-    public static final String ACCESS_TOKEN_DO = "AccessTokenDO";
+    private static final String ACCESS_TOKEN_DO = "AccessTokenDO";
     private static final String OIDC_SCOPE_VALIDATOR_CLASS = "org.wso2.carbon.identity.oauth2.validators.OIDCScopeValidator";
 
     @Override
