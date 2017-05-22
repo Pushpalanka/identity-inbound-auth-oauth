@@ -884,7 +884,7 @@ public class OAuthServerConfiguration {
         String scopeValidatorClazz = null;
         String scopesToSkipAttr = null;
 
-        if (scopeValidatorElem.getLocalName().equals(ConfigElements.SCOPE_VALIDATORS)) {
+        if (ConfigElements.SCOPE_VALIDATORS.equals(scopeValidatorElem.getLocalName())) {
             if (scopeValidatorElem.getFirstChildWithName
                     (getQNameWithIdentityNS(ConfigElements.OIDC_SCOPE_VALIDATOR)) != null) {
                 scopeValidatorClazz =
