@@ -24,6 +24,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.as.response.OAuthASResponse;
 import org.apache.oltu.oauth2.as.response.OAuthASResponse.OAuthTokenResponseBuilder;
 import org.apache.oltu.oauth2.common.OAuth;
+import org.apache.oltu.oauth2.common.error.OAuthError;
 import org.apache.oltu.oauth2.common.exception.OAuthProblemException;
 import org.apache.oltu.oauth2.common.exception.OAuthSystemException;
 import org.apache.oltu.oauth2.common.message.OAuthResponse;
@@ -32,14 +33,17 @@ import org.wso2.carbon.context.PrivilegedCarbonContext;
 import org.wso2.carbon.identity.oauth.IdentityOAuthAdminException;
 import org.wso2.carbon.identity.oauth.common.OAuth2ErrorCodes;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
+import org.wso2.carbon.identity.oauth.common.exception.InvalidOAuthClientException;
 import org.wso2.carbon.identity.oauth.common.exception.OAuthClientException;
 import org.wso2.carbon.identity.oauth.dao.OAuthAppDAO;
 import org.wso2.carbon.identity.oauth.endpoint.OAuthRequestWrapper;
 import org.wso2.carbon.identity.oauth.endpoint.util.EndpointUtil;
+import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.ResponseHeader;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenReqDTO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenRespDTO;
 import org.wso2.carbon.identity.oauth2.model.CarbonOAuthTokenRequest;
+import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
 import javax.servlet.http.HttpServletRequest;
@@ -77,12 +81,30 @@ public class OAuth2TokenEndpoint {
             HttpServletRequestWrapper httpRequest = new OAuthRequestWrapper(request, paramMap);
 
             String consumer_key = null;
+            String consumer_secret = null;
             OAuthAppDAO oAuthAppDAO = new OAuthAppDAO();
             try {
                 if (StringUtils.isNotEmpty(httpRequest.getParameter(OAuth.OAUTH_CLIENT_ID))) {
                     consumer_key = httpRequest.getParameter(OAuth.OAUTH_CLIENT_ID);
                 } else if (request.getHeader("authorization") != null) {
                     consumer_key = EndpointUtil.extractCredentialsFromAuthzHeader(request.getHeader("authorization"))[0];
+                }
+                if (StringUtils.isNotEmpty(httpRequest.getParameter(OAuth.OAUTH_CLIENT_SECRET))) {
+                    consumer_secret = httpRequest.getParameter(OAuth.OAUTH_CLIENT_SECRET);
+                } else if (request.getHeader("authorization") != null) {
+                    consumer_secret = EndpointUtil.extractCredentialsFromAuthzHeader(request.getHeader("authorization"))[1];
+                }
+                if (StringUtils.isNotEmpty(consumer_key)) {
+                    boolean isAuthenticated = OAuth2Util.authenticateClient(consumer_key, consumer_secret);
+                    if (!isAuthenticated) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("Client Authentication failed for client Id: " + consumer_key);
+                        }
+                        OAuthResponse oAuthResponse = OAuthASResponse.errorResponse(HttpServletResponse.SC_UNAUTHORIZED)
+                                .setError(OAuth2ErrorCodes.INVALID_CLIENT)
+                                .setErrorDescription("Client credentials are invalid.").buildJSONMessage();
+                        return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
+                    }
                 }
                 if (StringUtils.isNotEmpty(consumer_key)) {
                     String appState = oAuthAppDAO.getConsumerAppState(consumer_key);
@@ -111,6 +133,18 @@ public class OAuth2TokenEndpoint {
                 OAuthResponse oAuthResponse = OAuthASResponse.errorResponse(HttpServletResponse.SC_NOT_FOUND)
                         .setError(OAuth2ErrorCodes.SERVER_ERROR)
                         .setErrorDescription("Error decoding authorization header. Space delimited \"<authMethod> <base64Hash>\" format violated.").buildJSONMessage();
+                return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
+            } catch (InvalidOAuthClientException e) {
+                OAuthResponse oAuthResponse = OAuthASResponse.errorResponse(HttpServletResponse.SC_UNAUTHORIZED)
+                        .setError(OAuth2ErrorCodes.INVALID_CLIENT)
+                        .setErrorDescription("Cannot find an application associated with the given consumer key : " +
+                                consumer_key).buildJSONMessage();
+                return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
+
+            } catch (IdentityOAuth2Exception e) {
+                OAuthResponse oAuthResponse = OAuthASResponse.errorResponse(HttpServletResponse.SC_NOT_FOUND)
+                        .setError(OAuth2ErrorCodes.SERVER_ERROR)
+                        .setErrorDescription("Error while processing the token invocation request.").buildJSONMessage();
                 return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
             }
 
