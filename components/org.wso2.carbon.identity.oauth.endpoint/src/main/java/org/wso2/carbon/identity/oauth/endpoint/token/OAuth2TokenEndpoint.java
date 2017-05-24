@@ -79,25 +79,25 @@ public class OAuth2TokenEndpoint {
 
             HttpServletRequestWrapper httpRequest = new OAuthRequestWrapper(request, paramMap);
 
-            String consumer_key = null;
-            String consumer_secret = null;
+            String consumerKey = null;
+            String consumerSecret = null;
             OAuthAppDAO oAuthAppDAO = new OAuthAppDAO();
             try {
                 if (StringUtils.isNotEmpty(httpRequest.getParameter(OAuth.OAUTH_CLIENT_ID))) {
-                    consumer_key = httpRequest.getParameter(OAuth.OAUTH_CLIENT_ID);
+                    consumerKey = httpRequest.getParameter(OAuth.OAUTH_CLIENT_ID);
                 } else if (request.getHeader("authorization") != null) {
-                    consumer_key = EndpointUtil.extractCredentialsFromAuthzHeader(request.getHeader("authorization"))[0];
+                    consumerKey = EndpointUtil.extractCredentialsFromAuthzHeader(request.getHeader("authorization"))[0];
                 }
                 if (StringUtils.isNotEmpty(httpRequest.getParameter(OAuth.OAUTH_CLIENT_SECRET))) {
-                    consumer_secret = httpRequest.getParameter(OAuth.OAUTH_CLIENT_SECRET);
+                    consumerSecret = httpRequest.getParameter(OAuth.OAUTH_CLIENT_SECRET);
                 } else if (request.getHeader("authorization") != null) {
-                    consumer_secret = EndpointUtil.extractCredentialsFromAuthzHeader(request.getHeader("authorization"))[1];
+                    consumerSecret = EndpointUtil.extractCredentialsFromAuthzHeader(request.getHeader("authorization"))[1];
                 }
-                if (StringUtils.isNotEmpty(consumer_key)) {
-                    boolean isAuthenticated = OAuth2Util.authenticateClient(consumer_key, consumer_secret);
+                if (StringUtils.isNotEmpty(consumerKey)) {
+                    boolean isAuthenticated = OAuth2Util.authenticateClient(consumerKey, consumerSecret);
                     if (!isAuthenticated) {
                         if (log.isDebugEnabled()) {
-                            log.debug("Client Authentication failed for client Id: " + consumer_key);
+                            log.debug("Client Authentication failed for client Id: " + consumerKey);
                         }
                         OAuthResponse oAuthResponse = OAuthASResponse.errorResponse(HttpServletResponse.SC_UNAUTHORIZED)
                                 .setError(OAuth2ErrorCodes.INVALID_CLIENT)
@@ -105,8 +105,8 @@ public class OAuth2TokenEndpoint {
                         return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
                     }
                 }
-                if (StringUtils.isNotEmpty(consumer_key)) {
-                    String appState = oAuthAppDAO.getConsumerAppState(consumer_key);
+                if (StringUtils.isNotEmpty(consumerKey)) {
+                    String appState = oAuthAppDAO.getConsumerAppState(consumerKey);
                     if (!OAuthConstants.OauthAppStates.APP_STATE_ACTIVE.equalsIgnoreCase(appState)) {
                         if (log.isDebugEnabled()) {
                             log.debug("Oauth App is not in active state.");
@@ -137,7 +137,7 @@ public class OAuth2TokenEndpoint {
                 OAuthResponse oAuthResponse = OAuthASResponse.errorResponse(HttpServletResponse.SC_UNAUTHORIZED)
                         .setError(OAuth2ErrorCodes.INVALID_CLIENT)
                         .setErrorDescription("Cannot find an application associated with the given consumer key : " +
-                                consumer_key).buildJSONMessage();
+                                consumerKey).buildJSONMessage();
                 return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
 
             } catch (IdentityOAuth2Exception e) {
