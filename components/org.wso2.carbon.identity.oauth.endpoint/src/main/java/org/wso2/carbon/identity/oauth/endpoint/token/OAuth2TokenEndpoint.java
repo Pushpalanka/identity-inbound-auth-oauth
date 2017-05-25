@@ -80,7 +80,6 @@ public class OAuth2TokenEndpoint {
             HttpServletRequestWrapper httpRequest = new OAuthRequestWrapper(request, paramMap);
 
             String consumerKey = null;
-            String consumerSecret = null;
             OAuthAppDAO oAuthAppDAO = new OAuthAppDAO();
             try {
                 if (StringUtils.isNotEmpty(httpRequest.getParameter(OAuth.OAUTH_CLIENT_ID))) {
@@ -88,25 +87,19 @@ public class OAuth2TokenEndpoint {
                 } else if (request.getHeader("authorization") != null) {
                     consumerKey = EndpointUtil.extractCredentialsFromAuthzHeader(request.getHeader("authorization"))[0];
                 }
-                if (StringUtils.isNotEmpty(httpRequest.getParameter(OAuth.OAUTH_CLIENT_SECRET))) {
-                    consumerSecret = httpRequest.getParameter(OAuth.OAUTH_CLIENT_SECRET);
-                } else if (request.getHeader("authorization") != null) {
-                    consumerSecret = EndpointUtil.extractCredentialsFromAuthzHeader(request.getHeader("authorization"))[1];
-                }
+
                 if (StringUtils.isNotEmpty(consumerKey)) {
-                    boolean isAuthenticated = OAuth2Util.authenticateClient(consumerKey, consumerSecret);
-                    if (!isAuthenticated) {
+                    String appState = oAuthAppDAO.getConsumerAppState(consumerKey);
+                    if (StringUtils.isEmpty(appState)) {
                         if (log.isDebugEnabled()) {
-                            log.debug("Client Authentication failed for client Id: " + consumerKey);
+                            log.debug("appState is null. Client is invalid.");
                         }
                         OAuthResponse oAuthResponse = OAuthASResponse.errorResponse(HttpServletResponse.SC_UNAUTHORIZED)
                                 .setError(OAuth2ErrorCodes.INVALID_CLIENT)
-                                .setErrorDescription("Client credentials are invalid.").buildJSONMessage();
+                                .setErrorDescription("The client is invalid.").buildJSONMessage();
                         return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
                     }
-                }
-                if (StringUtils.isNotEmpty(consumerKey)) {
-                    String appState = oAuthAppDAO.getConsumerAppState(consumerKey);
+
                     if (!OAuthConstants.OauthAppStates.APP_STATE_ACTIVE.equalsIgnoreCase(appState)) {
                         if (log.isDebugEnabled()) {
                             log.debug("Oauth App is not in active state.");
@@ -133,20 +126,7 @@ public class OAuth2TokenEndpoint {
                         .setError(OAuth2ErrorCodes.SERVER_ERROR)
                         .setErrorDescription("Error decoding authorization header. Space delimited \"<authMethod> <base64Hash>\" format violated.").buildJSONMessage();
                 return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
-            } catch (InvalidOAuthClientException e) {
-                OAuthResponse oAuthResponse = OAuthASResponse.errorResponse(HttpServletResponse.SC_UNAUTHORIZED)
-                        .setError(OAuth2ErrorCodes.INVALID_CLIENT)
-                        .setErrorDescription("Cannot find an application associated with the given consumer key : " +
-                                consumerKey).buildJSONMessage();
-                return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
-
-            } catch (IdentityOAuth2Exception e) {
-                OAuthResponse oAuthResponse = OAuthASResponse.errorResponse(HttpServletResponse.SC_NOT_FOUND)
-                        .setError(OAuth2ErrorCodes.SERVER_ERROR)
-                        .setErrorDescription("Error while processing the token invocation request.").buildJSONMessage();
-                return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
             }
-
             // extract the basic auth credentials if present in the request and use for
             // authentication.
             if (request.getHeader(OAuthConstants.HTTP_REQ_HEADER_AUTHZ) != null) {
