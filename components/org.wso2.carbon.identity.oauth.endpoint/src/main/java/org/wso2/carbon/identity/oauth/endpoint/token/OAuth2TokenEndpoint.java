@@ -84,7 +84,7 @@ public class OAuth2TokenEndpoint {
             try {
                 if (StringUtils.isNotEmpty(httpRequest.getParameter(OAuth.OAUTH_CLIENT_ID))) {
                     consumerKey = httpRequest.getParameter(OAuth.OAUTH_CLIENT_ID);
-                } else if (request.getHeader("authorization") != null) {
+                } else if (request.getHeader(OAuthConstants.HTTP_REQ_HEADER_AUTHZ) != null) {
                     consumerKey = EndpointUtil.extractCredentialsFromAuthzHeader(request.getHeader("authorization"))[0];
                 }
 
@@ -92,11 +92,12 @@ public class OAuth2TokenEndpoint {
                     String appState = oAuthAppDAO.getConsumerAppState(consumerKey);
                     if (StringUtils.isEmpty(appState)) {
                         if (log.isDebugEnabled()) {
-                            log.debug("appState is null. Client is invalid.");
+                            log.debug("A valid OAuth client could not be found for client_id:" + consumerKey);
                         }
                         OAuthResponse oAuthResponse = OAuthASResponse.errorResponse(HttpServletResponse.SC_UNAUTHORIZED)
                                 .setError(OAuth2ErrorCodes.INVALID_CLIENT)
-                                .setErrorDescription("The client is invalid.").buildJSONMessage();
+                                .setErrorDescription("A valid OAuth client could not be found for client_id:" +
+                                        consumerKey).buildJSONMessage();
                         return Response.status(oAuthResponse.getResponseStatus()).entity(oAuthResponse.getBody()).build();
                     }
 
