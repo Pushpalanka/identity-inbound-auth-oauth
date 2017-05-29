@@ -324,7 +324,7 @@ public class TokenMgtDAO {
         } catch (SQLException e) {
             // Handle constrain violation issue in JDBC drivers which does not throw
             // SQLIntegrityConstraintViolationException
-            if (e.getMessage().contains("CON_APP_KEY")) {
+            if (StringUtils.containsIgnoreCase(e.getMessage(), "CON_APP_KEY")) {
                 if (retryAttempt >= tokenPersistRetryCount) {
                     log.error("'CON_APP_KEY' constrain violation retry count exceeds above the maximum count - " +
                             tokenPersistRetryCount);
