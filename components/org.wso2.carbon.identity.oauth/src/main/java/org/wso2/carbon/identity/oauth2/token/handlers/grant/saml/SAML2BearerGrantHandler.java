@@ -277,9 +277,12 @@ public class SAML2BearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         Conditions conditions = assertion.getConditions();
         if (conditions != null) {
-            //Set validity period extracted from SAML Assertion
-            long curTimeInMillis = Calendar.getInstance().getTimeInMillis();
-            tokReqMsgCtx.setValidityPeriod(conditions.getNotOnOrAfter().getMillis() - curTimeInMillis);
+            if (conditions.getNotOnOrAfter() != null) {
+                //Set validity period extracted from SAML Assertion
+                long curTimeInMillis = Calendar.getInstance().getTimeInMillis();
+                tokReqMsgCtx.setValidityPeriod(conditions.getNotOnOrAfter().getMillis() - curTimeInMillis);
+            }
+
             List<AudienceRestriction> audienceRestrictions = conditions.getAudienceRestrictions();
             if (audienceRestrictions != null && !audienceRestrictions.isEmpty()) {
                 boolean audienceFound = false;
@@ -453,9 +456,11 @@ public class SAML2BearerGrantHandler extends AbstractAuthorizationGrantHandler {
         }
 
         boolean validSubjectConfirmationDataExists = false;
+        DateTime notOnOrAfterFromSubjectConfirmations = null;
         if (!notOnOrAfterFromAndNotBeforeSubjectConfirmations.isEmpty()) {
             for (Map.Entry<DateTime, DateTime> entry : notOnOrAfterFromAndNotBeforeSubjectConfirmations.entrySet()) {
                 if (entry.getKey() != null) {
+                    notOnOrAfterFromSubjectConfirmations = entry.getKey();
                     if (entry.getKey().compareTo(new DateTime()) >= 1) {
                         validSubjectConfirmationDataExists = true;
                     }
@@ -466,6 +471,20 @@ public class SAML2BearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     }
                 }
             }
+        }
+
+        if (notOnOrAfterFromConditions == null && notOnOrAfterFromSubjectConfirmations != null) {
+            //Set validity period extracted from SAML subject confirmation
+            long curTimeInMillis = Calendar.getInstance().getTimeInMillis();
+            tokReqMsgCtx.setValidityPeriod(notOnOrAfterFromSubjectConfirmations.getMillis() - curTimeInMillis);
+        }
+
+        if (notOnOrAfterFromConditions == null && notOnOrAfterFromAndNotBeforeSubjectConfirmations == null) {
+            if (log.isDebugEnabled()) {
+                log.debug("No valid NotOnOrAfter element found in either Conditions or SubjectConfirmationData " +
+                        "element");
+            }
+            return false;
         }
 
         if (notOnOrAfterFromConditions == null && !validSubjectConfirmationDataExists) {
