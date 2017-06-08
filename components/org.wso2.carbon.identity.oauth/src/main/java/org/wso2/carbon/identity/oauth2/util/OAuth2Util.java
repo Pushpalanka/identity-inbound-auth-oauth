@@ -477,20 +477,13 @@ public class OAuth2Util {
     public static List<String> getIdtokenAllowedGrantTypeList() {
 
         List<String> idTokenAllowedGrantTypesList = new ArrayList();
-        OAuth2ScopeValidator scopeValidator = OAuthServerConfiguration.getInstance().getoAuth2ScopeValidator();
-        if (scopeValidator != null && scopeValidator.getClass() != null) {
-            //if OIDC scope validator is engaged through the configuration
-            if (scopeValidator.getClass().getName().equals(OIDC_SCOPE_VALIDATOR_CLASS)) {
-                Map<String, String> idTokenAllowedGrantTypesMap = OAuthServerConfiguration.getInstance().
-                        getIdTokenAllowedForGrantTypesMap();
-                if (!idTokenAllowedGrantTypesMap.isEmpty()) {
-                    for (Map.Entry<String, String> entry : idTokenAllowedGrantTypesMap.entrySet()) {
-                        if (Boolean.parseBoolean(entry.getValue())) {
-                            idTokenAllowedGrantTypesList.add(entry.getKey());
-                        }
-                    }
+        Map<String, String> idTokenAllowedGrantTypesMap = OAuthServerConfiguration.getInstance().
+                getIdTokenAllowedForGrantTypesMap();
+        if (!idTokenAllowedGrantTypesMap.isEmpty()) {
+            for (Map.Entry<String, String> entry : idTokenAllowedGrantTypesMap.entrySet()) {
+                if (Boolean.parseBoolean(entry.getValue())) {
+                    idTokenAllowedGrantTypesList.add(entry.getKey());
                 }
-
             }
         }
         return idTokenAllowedGrantTypesList;
