@@ -52,6 +52,7 @@ import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.model.ClientCredentialDO;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
+import org.wso2.carbon.identity.oauth2.validators.OAuth2ScopeValidator;
 import org.wso2.carbon.registry.core.Registry;
 import org.wso2.carbon.registry.core.Resource;
 import org.wso2.carbon.registry.core.exceptions.RegistryException;
@@ -98,6 +99,7 @@ public class OAuth2Util {
     public static final String JWT_ACCESS_TOKEN = "JWT_ACCESS_TOKEN";
     public static final String ACCESS_TOKEN_DO = "AccessTokenDo";
     public static final String OAUTH2_VALIDATION_MESSAGE_CONTEXT = "OAuth2TokenValidationMessageContext";
+    private static final String OIDC_SCOPE_VALIDATOR_CLASS = "org.wso2.carbon.identity.oauth2.validators.OIDCScopeValidator";
 
     private static final String ALGORITHM_NONE = "NONE";
     /*
@@ -465,6 +467,33 @@ public class OAuth2Util {
         }
         //returns null if cached OAuth2AccessToken response object is expired
         return null;
+    }
+
+    /**
+     * Get Id Token allowed grant type list from identity.xml.
+     *
+     * @return Id Token allowed grant type list
+     */
+    public static List<String> getIdtokenAllowedGrantTypeList() {
+
+        List<String> idTokenAllowedGrantTypesList = new ArrayList();
+        OAuth2ScopeValidator scopeValidator = OAuthServerConfiguration.getInstance().getoAuth2ScopeValidator();
+        if (scopeValidator != null && scopeValidator.getClass() != null) {
+            //if OIDC scope validator is engaged through the configuration
+            if (scopeValidator.getClass().getName().equals(OIDC_SCOPE_VALIDATOR_CLASS)) {
+                Map<String, String> idTokenAllowedGrantTypesMap = OAuthServerConfiguration.getInstance().
+                        getIdTokenAllowedForGrantTypesMap();
+                if (!idTokenAllowedGrantTypesMap.isEmpty()) {
+                    for (Map.Entry<String, String> entry : idTokenAllowedGrantTypesMap.entrySet()) {
+                        if (Boolean.parseBoolean(entry.getValue())) {
+                            idTokenAllowedGrantTypesList.add(entry.getKey());
+                        }
+                    }
+                }
+
+            }
+        }
+        return idTokenAllowedGrantTypesList;
     }
 
     public static boolean checkAccessTokenPartitioningEnabled() {

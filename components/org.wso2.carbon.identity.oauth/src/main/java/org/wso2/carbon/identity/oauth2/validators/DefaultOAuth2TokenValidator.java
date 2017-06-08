@@ -54,15 +54,7 @@ public class DefaultOAuth2TokenValidator implements OAuth2TokenValidator {
         if (scopeValidator != null && scopeValidator.getClass() != null && messageContext.getRequestDTO() != null) {
             //if OIDC scope validator is engaged through the configuration
             if (scopeValidator.getClass().getName().equals(OIDC_SCOPE_VALIDATOR_CLASS)) {
-                List<String> idTokenAllowedGrantTypesList = new ArrayList();
-                Map<String, String> idTokenAllowedGrantTypesMap = OAuthServerConfiguration.getInstance().getIdTokenAllowedForGrantTypesMap();
-                if (!idTokenAllowedGrantTypesMap.isEmpty()) {
-                    for (Map.Entry<String, String> entry : idTokenAllowedGrantTypesMap.entrySet()) {
-                        if (Boolean.parseBoolean(entry.getValue())) {
-                            idTokenAllowedGrantTypesList.add(entry.getKey());
-                        }
-                    }
-                }
+                List<String> idTokenAllowedGrantTypesList = OAuth2Util.getIdtokenAllowedGrantTypeList();
                 if (!idTokenAllowedGrantTypesList.isEmpty()) {
                     return scopeValidator.validateScope((AccessTokenDO) messageContext.getProperty(ACCESS_TOKEN_DO),
                             idTokenAllowedGrantTypesList.toString());
