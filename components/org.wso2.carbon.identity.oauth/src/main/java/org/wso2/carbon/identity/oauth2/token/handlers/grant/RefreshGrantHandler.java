@@ -20,6 +20,7 @@ package org.wso2.carbon.identity.oauth2.token.handlers.grant;
 
 import org.apache.axiom.util.base64.Base64Utils;
 import org.apache.commons.io.Charsets;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.common.error.OAuthError;
@@ -40,7 +41,9 @@ import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -332,6 +335,32 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
                 new ResponseHeader[respHeaders.size()]));
 
         return tokenRespDTO;
+    }
+
+    @Override
+    public boolean validateScope(OAuthTokenReqMessageContext tokReqMsgCtx)
+            throws IdentityOAuth2Exception {
+        /**
+         * The requested scope MUST NOT include any scope
+         * not originally granted by the resource owner, and if omitted is
+         * treated as equal to the scope originally granted by the
+         * resource owner
+         */
+        String[] requestedScopes = tokReqMsgCtx.getOauth2AccessTokenReqDTO().getScope();
+        String[] grantedScopes = tokReqMsgCtx.getScope();
+        if (ArrayUtils.isNotEmpty(requestedScopes)) {
+            if (ArrayUtils.isEmpty(grantedScopes)) {
+                return false;
+            }
+            List<String> grantedScopeList = Arrays.asList(grantedScopes);
+            for (String scope : requestedScopes) {
+                if (!grantedScopeList.contains(scope)) {
+                    return false;
+                }
+            }
+            tokReqMsgCtx.setScope(requestedScopes);
+        }
+        return super.validateScope(tokReqMsgCtx);
     }
 
     private OAuth2AccessTokenRespDTO handleError(String errorCode, String errorMsg,
