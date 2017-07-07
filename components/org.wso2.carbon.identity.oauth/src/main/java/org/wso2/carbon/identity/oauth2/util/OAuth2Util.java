@@ -28,10 +28,13 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.common.message.types.ResponseType;
+import org.json.JSONObject;
 import org.wso2.carbon.base.CarbonBaseConstants;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.base.IdentityConstants;
+import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.util.IdentityIOStreamUtils;
+import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.IdentityOAuthAdminException;
 import org.wso2.carbon.identity.oauth.cache.AppInfoCache;
@@ -47,6 +50,7 @@ import org.wso2.carbon.identity.oauth.dao.OAuthConsumerDAO;
 import org.wso2.carbon.identity.oauth.internal.OAuthComponentServiceHolder;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.authz.OAuthAuthzReqMessageContext;
+import org.wso2.carbon.identity.oauth2.config.SpOAuth2ExpiryTimeConfiguration;
 import org.wso2.carbon.identity.oauth2.dao.TokenMgtDAO;
 import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
@@ -162,6 +166,20 @@ public class OAuth2Util {
      * token was originally issued, as defined in JWT
      */
     public static final String IAT = "iat";
+    /***
+     * Constant for user access token expiry time.
+     */
+    public static final String USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS = "userAccessTokenExpireTime";
+
+    /***
+     * Constant for refresh token expiry time.
+     */
+    public static final String REFRESH_TOKEN_TIME_IN_MILLISECONDS = "refreshTokenExpireTime";
+
+    /***
+     * Constant for application access token expiry time.
+     */
+    public static final String APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS = "applicationAccessTokenExpireTime";
 
 
     private static Log log = LogFactory.getLog(OAuth2Util.class);
@@ -1073,6 +1091,121 @@ public class OAuth2Util {
     public static String getClientIdForAccessToken(String accessTokenIdentifier) throws IdentityOAuth2Exception {
         AccessTokenDO accessTokenDO = getAccessTokenDOfromTokenIdentifier(accessTokenIdentifier);
         return accessTokenDO.getConsumerKey();
+    }
+
+    /***
+     * Read the configuration file at server start up.
+     * @param tenantId
+     */
+    public static void initTokenExpiryTimesOfSps(int tenantId) {
+        try{
+            Registry registry = OAuth2ServiceComponentHolder.getRegistryService().getConfigSystemRegistry(tenantId);
+            if (!registry.resourceExists(OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH)) {
+                Resource resource = registry.newResource();
+                registry.put(OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH, resource);
+            }
+        } catch (RegistryException e) {
+            log.error("Error while creating registry collection for :" + OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH, e);
+        }
+    }
+
+    /***
+     * Return the SP-token Expiry time configuration object when consumer key is given.
+     * @param consumerKey
+     * @param tenantId
+     * @return A SpOAuth2ExpiryTimeConfiguration Object
+     */
+    public static SpOAuth2ExpiryTimeConfiguration getSpTokenExpiryTimeConfig(String consumerKey, int tenantId) {
+        SpOAuth2ExpiryTimeConfiguration spTokenTimeObject = new SpOAuth2ExpiryTimeConfiguration();
+        try {
+            if (log.isDebugEnabled()) {
+                log.debug("SP wise token expiry time feature is applied for tenant id : " + tenantId
+                        + "and consumer key : " + consumerKey);
+            }
+            IdentityTenantUtil.initializeRegistry(tenantId, getTenantDomain(tenantId));
+            Registry registry = IdentityTenantUtil.getConfigRegistry(tenantId);
+            if (registry.resourceExists(OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH)) {
+                Resource resource = registry.get(OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH);
+                String jsonString = "{}";
+                Object consumerKeyObject = resource.getProperties().get(consumerKey);
+                if (consumerKeyObject instanceof List) {
+                    if (!((List) consumerKeyObject).isEmpty()) {
+                        jsonString = ((List) consumerKeyObject).get(0).toString();
+                    }
+                }
+                JSONObject spTimeObject = new JSONObject(jsonString);
+                if (spTimeObject.length() > 0) {
+                    if (spTimeObject.has(USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS) &&
+                            !spTimeObject.isNull(USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS)) {
+                        try {
+                            spTokenTimeObject.setUserAccessTokenExpiryTime(Long.parseLong(spTimeObject
+                                    .get(USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString()));
+                            if (log.isDebugEnabled()) {
+                                log.debug("The user access token expiry time :" + spTimeObject
+                                        .get(USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString() +
+                                        "  for application id : " + consumerKey);
+                            }
+                        } catch (NumberFormatException e) {
+                            String errorMsg = String.format("Invalid value provided as user access token expiry time for consumer key %s," +
+                                    " tenant id : %d. Given value: %s, Expected a long value", consumerKey, tenantId, spTimeObject
+                                    .get(USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString());
+                            log.error(errorMsg, e);
+                        }
+                    } else {
+                        spTokenTimeObject.setUserAccessTokenExpiryTime(OAuthServerConfiguration.getInstance()
+                                .getUserAccessTokenValidityPeriodInSeconds() * 1000);
+                    }
+
+                    if (spTimeObject.has(APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS) &&
+                            !spTimeObject.isNull(APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS)) {
+                        try {
+                            spTokenTimeObject.setApplicationAccessTokenExpiryTime(Long.parseLong(spTimeObject
+                                    .get(APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString()));
+                            if (log.isDebugEnabled()) {
+                                log.debug("The application access token expiry time :" + spTimeObject
+                                        .get(APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString() +
+                                        "  for application id : " + consumerKey);
+                            }
+                        } catch (NumberFormatException e) {
+                            String errorMsg = String.format("Invalid value provided as application access token expiry time for " +
+                                    "consumer key %s, tenant id : %d. Given value: %s, Expected a long value ", consumerKey, tenantId, spTimeObject
+                                    .get(APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString());
+                            log.error(errorMsg, e);
+                        }
+                    } else {
+                        spTokenTimeObject.setApplicationAccessTokenExpiryTime(OAuthServerConfiguration.getInstance()
+                                .getApplicationAccessTokenValidityPeriodInSeconds() * 1000);
+                    }
+
+                    if (spTimeObject.has(REFRESH_TOKEN_TIME_IN_MILLISECONDS) &&
+                            !spTimeObject.isNull(REFRESH_TOKEN_TIME_IN_MILLISECONDS)) {
+                        try {
+                            spTokenTimeObject.setRefreshTokenExpiryTime(Long.parseLong(spTimeObject
+                                    .get(REFRESH_TOKEN_TIME_IN_MILLISECONDS).toString()));
+                            if (log.isDebugEnabled()) {
+                                log.debug("The refresh token expiry time :" + spTimeObject
+                                        .get(REFRESH_TOKEN_TIME_IN_MILLISECONDS).toString() +
+                                        " for application id : " + consumerKey);
+                            }
+
+                        } catch (NumberFormatException e) {
+                            String errorMsg = String.format("Invalid value provided as refresh token expiry time for consumer key %s," +
+                                    " tenant id : %d. Given value: %s, Expected a long value", consumerKey, tenantId, spTimeObject
+                                    .get(REFRESH_TOKEN_TIME_IN_MILLISECONDS).toString());
+                            log.error(errorMsg, e);
+                        }
+                    } else {
+                        spTokenTimeObject.setRefreshTokenExpiryTime(OAuthServerConfiguration.getInstance()
+                                .getRefreshTokenValidityPeriodInSeconds() * 1000);
+                    }
+                }
+            }
+        } catch (RegistryException e) {
+            log.error("Error while getting data from the registry.", e);
+        } catch (IdentityException e) {
+            log.error("Error while getting the tenant domain from tenant id : " + tenantId , e);
+        }
+        return spTokenTimeObject;
     }
 
     private static Map<String, String> loadScopeConfigFile() {
