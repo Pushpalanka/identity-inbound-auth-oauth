@@ -53,6 +53,11 @@ import java.util.Set;
  */
 public class JDBCScopeValidator extends OAuth2ScopeValidator {
 
+    // The following constants are as same as the constants defined in
+    // org.wso2.carbon.apimgt.keymgt.handlers.ResourceConstants.
+    // If any changes are taking place in that these should also be updated accordingly.
+    public static final String CHECK_ROLES_FROM_SAML_ASSERTION = "checkRolesFromSamlAssertion";
+
     Log log = LogFactory.getLog(JDBCScopeValidator.class);
 
     @Override
@@ -121,6 +126,14 @@ public class JDBCScopeValidator extends OAuth2ScopeValidator {
                             resourceScope + "'");
             }
             return false;
+        }
+
+        // If a federated user and CHECK_ROLES_FROM_SAML_ASSERTION system property is set to true,
+        // avoid validating user roles.
+        // This system property is set at server start using -D option, Thus will be a permanent property.
+        if (accessTokenDO.getAuthzUser().isFederatedUser()
+                && Boolean.parseBoolean(System.getProperty(CHECK_ROLES_FROM_SAML_ASSERTION))) {
+            return true;
         }
 
         try {
