@@ -31,7 +31,7 @@ import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.ResponseHeader;
-import org.wso2.carbon.identity.oauth2.dao.SQLQueries;
+import org.wso2.carbon.identity.oauth2.config.SpOAuth2ExpiryTimeConfiguration;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenReqDTO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenRespDTO;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
@@ -58,7 +58,7 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
     public boolean validateGrant(OAuthTokenReqMessageContext tokReqMsgCtx)
             throws IdentityOAuth2Exception {
 
-        if(!super.validateGrant(tokReqMsgCtx)){
+        if (!super.validateGrant(tokReqMsgCtx)) {
             return false;
         }
 
@@ -80,7 +80,7 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
                         validationDataDO.getRefreshTokenState()) &&
                 !OAuthConstants.TokenStates.TOKEN_STATE_EXPIRED.equals(
                         validationDataDO.getRefreshTokenState())) {
-            if(log.isDebugEnabled()) {
+            if (log.isDebugEnabled()) {
                 log.debug("Access Token is not in 'ACTIVE' or 'EXPIRED' state for Client with " +
                         "Client Id : " + tokenReqDTO.getClientId());
             }
@@ -144,6 +144,14 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
         OAuth2AccessTokenRespDTO tokenRespDTO = new OAuth2AccessTokenRespDTO();
         OAuth2AccessTokenReqDTO oauth2AccessTokenReqDTO = tokReqMsgCtx.getOauth2AccessTokenReqDTO();
         String scope = OAuth2Util.buildScopeString(tokReqMsgCtx.getScope());
+        SpOAuth2ExpiryTimeConfiguration spTimeConfigObj = OAuth2Util
+                .getSpTokenExpiryTimeConfig(oauth2AccessTokenReqDTO.getClientId(), OAuth2Util
+                        .getTenantId(oauth2AccessTokenReqDTO.getTenantDomain()));
+        if (log.isDebugEnabled()) {
+            log.debug("Service Provider specific expiry time enabled for application : " + oauth2AccessTokenReqDTO.getClientId() + ". Application access token expiry time : " + spTimeConfigObj.getApplicationAccessTokenExpiryTime() +
+                    ", User access token expiry time : " + spTimeConfigObj.getUserAccessTokenExpiryTime() + ", Refresh token expiry time : " +
+                    spTimeConfigObj.getRefreshTokenExpiryTime());
+        }
 
         String tokenId;
         String accessToken;

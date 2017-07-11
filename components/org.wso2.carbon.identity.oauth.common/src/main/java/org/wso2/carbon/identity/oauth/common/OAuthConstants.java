@@ -112,6 +112,9 @@ public final class OAuthConstants {
 
     public static final String TENANT_NAME_FROM_CONTEXT = "TenantNameFromContext";
 
+    //Oauth2 sp expire time configuration.
+    public static final String TOKEN_EXPIRE_TIME_RESOURCE_PATH = "/identity/config/spTokenExpireTime";
+
     public static class GrantTypes {
         public static final String IMPLICIT = "implicit";
         public static final String TOKEN = "token";

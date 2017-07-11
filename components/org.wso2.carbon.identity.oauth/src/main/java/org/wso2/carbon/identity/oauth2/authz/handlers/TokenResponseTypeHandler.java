@@ -40,6 +40,7 @@ import org.wso2.carbon.identity.oauth.event.OAuthEventInterceptor;
 import org.wso2.carbon.identity.oauth.internal.OAuthComponentServiceHolder;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.authz.OAuthAuthzReqMessageContext;
+import org.wso2.carbon.identity.oauth2.config.SpOAuth2ExpiryTimeConfiguration;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AuthorizeReqDTO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AuthorizeRespDTO;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
@@ -103,6 +104,14 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
         if (OAuth2Util.checkAccessTokenPartitioningEnabled() &&
                 OAuth2Util.checkUserNameAssertionEnabled()) {
             userStoreDomain = OAuth2Util.getUserStoreDomainFromUserId(authorizedUser);
+        }
+        SpOAuth2ExpiryTimeConfiguration spTimeConfigObj = OAuth2Util
+                .getSpTokenExpiryTimeConfig(consumerKey, OAuth2Util
+                        .getTenantId(authorizationReqDTO.getUser().getTenantDomain()));
+        if (log.isDebugEnabled()) {
+            log.debug("Service Provider specific expiry time enabled for application : " + consumerKey + ". Application access token expiry time : " + spTimeConfigObj.getApplicationAccessTokenExpiryTime() +
+                    ", User access token expiry time : " + spTimeConfigObj.getUserAccessTokenExpiryTime() + ", Refresh token expiry time : " +
+                    spTimeConfigObj.getRefreshTokenExpiryTime());
         }
 
         String refreshToken = null;
@@ -277,6 +286,9 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
             // Default token validity Period
             long validityPeriodInMillis = OAuthServerConfiguration.getInstance().
                     getUserAccessTokenValidityPeriodInSeconds() * 1000;
+            if (spTimeConfigObj.getUserAccessTokenExpiryTime() != null) {
+                validityPeriodInMillis = spTimeConfigObj.getUserAccessTokenExpiryTime();
+            }
 
             // if a VALID validity period is set through the callback, then use it
             long callbackValidityPeriod = oauthAuthzMsgCtx.getValidityPeriod();
@@ -284,12 +296,15 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
                     && callbackValidityPeriod > 0) {
                 validityPeriodInMillis = callbackValidityPeriod * 1000;
             }
-
             // If issuing new refresh token, use default refresh token validity Period
             // otherwise use existing refresh token's validity period
             if (refreshTokenValidityPeriodInMillis == 0) {
-                refreshTokenValidityPeriodInMillis = OAuthServerConfiguration.getInstance()
-                        .getRefreshTokenValidityPeriodInSeconds() * 1000;
+                if (spTimeConfigObj.getRefreshTokenExpiryTime() != null) {
+                    refreshTokenValidityPeriodInMillis = spTimeConfigObj.getRefreshTokenExpiryTime();
+                } else {
+                    refreshTokenValidityPeriodInMillis = OAuthServerConfiguration.getInstance()
+                            .getRefreshTokenValidityPeriodInSeconds() * 1000;
+                }
             }
 
             // issue a new access token
@@ -446,7 +461,7 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
 
         String sub = userAttributes.get(OAuth2Util.SUB);
 
-        AccessTokenDO accessTokenDO = (AccessTokenDO)msgCtx.getProperty(OAuth2Util.ACCESS_TOKEN_DO);
+        AccessTokenDO accessTokenDO = (AccessTokenDO) msgCtx.getProperty(OAuth2Util.ACCESS_TOKEN_DO);
         if (accessTokenDO != null && StringUtils.isNotBlank(accessTokenDO.getTokenId())) {
             authorizationGrantCacheEntry.setTokenId(accessTokenDO.getTokenId());
         }
@@ -466,6 +481,6 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
         }
 
         AuthorizationGrantCache.getInstance().addToCacheByToken(authorizationGrantCacheKey,
-                                                                authorizationGrantCacheEntry);
+                authorizationGrantCacheEntry);
     }
 }
