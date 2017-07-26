@@ -1506,7 +1506,6 @@ public class TokenMgtDAO {
             if (rs.next()) {
                 return rs.getString("SCOPE_KEY");
             }
-            connection.commit();
             return null;
         } catch (SQLException e) {
             String errorMsg = "Error getting scopes for resource - " + resourceUri + " : " + e.getMessage();
@@ -1541,7 +1540,6 @@ public class TokenMgtDAO {
                 int tenantId = rs.getInt("TENANT_ID");
                 return Pair.of(scopeKey, tenantId);
             }
-            connection.commit();
             return null;
         } catch (SQLException e) {
             String errorMsg = "Error getting scopes for resource - " + resourceUri;
