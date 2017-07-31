@@ -152,7 +152,12 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
                         }
                         respDTO.setScope(oauthAuthzMsgCtx.getApprovedScope());
                         respDTO.setTokenType(accessTokenDO.getTokenType());
-                        buildIdToken(oauthAuthzMsgCtx, respDTO);
+
+                        // we only need to deal with id_token and user attributes if the request is OIDC
+                        if (isOIDCRequest(oauthAuthzMsgCtx)) {
+                            buildIdToken(oauthAuthzMsgCtx, respDTO);
+                        }
+
                         triggerPostListeners(oauthAuthzMsgCtx, accessTokenDO, respDTO);
                         return respDTO;
                     } else {
@@ -233,7 +238,11 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
                     respDTO.setScope(oauthAuthzMsgCtx.getApprovedScope());
                     respDTO.setTokenType(existingAccessTokenDO.getTokenType());
 
-                    buildIdToken(oauthAuthzMsgCtx, respDTO);
+                    // we only need to deal with id_token and user attributes if the request is OIDC
+                    if (isOIDCRequest(oauthAuthzMsgCtx)) {
+                        buildIdToken(oauthAuthzMsgCtx, respDTO);
+                    }
+
                     triggerPostListeners(oauthAuthzMsgCtx, existingAccessTokenDO, respDTO);
                     return respDTO;
 
@@ -414,7 +423,11 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
             }
         }
 
-        buildIdToken(oauthAuthzMsgCtx, respDTO);
+        // we only need to deal with id_token and user attributes if the request is OIDC
+        if (isOIDCRequest(oauthAuthzMsgCtx)) {
+            buildIdToken(oauthAuthzMsgCtx, respDTO);
+        }
+
         triggerPostListeners(oauthAuthzMsgCtx, tokenDO, respDTO);
         return respDTO;
     }
@@ -435,6 +448,18 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
         }
     }
 
+    private boolean isOIDCRequest (OAuthAuthzReqMessageContext msgCtx) {
+
+        return msgCtx.getApprovedScope() != null && OAuth2Util.isOIDCAuthzRequest(msgCtx.getApprovedScope());
+    }
+
+    /**
+     * Handles caching user attributes and building the id_token for the OIDC implicit authz request.
+     *
+     * @param msgCtx
+     * @param authzRespDTO
+     * @throws IdentityOAuth2Exception
+     */
     private void buildIdToken(OAuthAuthzReqMessageContext msgCtx, OAuth2AuthorizeRespDTO authzRespDTO)
             throws IdentityOAuth2Exception {
 
@@ -442,8 +467,7 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
             addUserAttributesToCache(authzRespDTO.getAccessToken(), msgCtx);
         }
 
-        if (StringUtils.contains(msgCtx.getAuthorizationReqDTO().getResponseType(), "id_token") &&
-                msgCtx.getApprovedScope() != null && OAuth2Util.isOIDCAuthzRequest(msgCtx.getApprovedScope())) {
+        if (StringUtils.contains(msgCtx.getAuthorizationReqDTO().getResponseType(), "id_token")) {
             IDTokenBuilder builder = OAuthServerConfiguration.getInstance().getOpenIDConnectIDTokenBuilder();
             authzRespDTO.setIdToken(builder.buildIDToken(msgCtx, authzRespDTO));
         }
