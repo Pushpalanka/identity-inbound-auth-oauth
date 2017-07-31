@@ -283,6 +283,8 @@ public class OAuth2TokenEndpoint {
         tokenReqDTO.setScope(oauthRequest.getScopes().toArray(new String[oauthRequest.getScopes().size()]));
         tokenReqDTO.setTenantDomain(oauthRequest.getTenantDomain());
         tokenReqDTO.setPkceCodeVerifier(oauthRequest.getPkceCodeVerifier());
+        // Set all request parameters to the OAuth2AccessTokenReqDTO
+        tokenReqDTO.setRequestParameters(oauthRequest.getRequestParameters());
 
         // Check the grant type and set the corresponding parameters
         if (GrantType.AUTHORIZATION_CODE.toString().equals(grantType)) {
@@ -297,9 +299,6 @@ public class OAuth2TokenEndpoint {
             tokenReqDTO.setAssertion(oauthRequest.getAssertion());
         } else if (org.wso2.carbon.identity.oauth.common.GrantType.IWA_NTLM.toString().equals(grantType)) {
             tokenReqDTO.setWindowsToken(oauthRequest.getWindowsToken());
-        } else {
-            // Set all request parameters to the OAuth2AccessTokenReqDTO
-            tokenReqDTO.setRequestParameters(oauthRequest.getRequestParameters());
         }
 
         return EndpointUtil.getOAuth2Service().issueAccessToken(tokenReqDTO);
