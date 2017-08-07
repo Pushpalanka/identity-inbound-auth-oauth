@@ -53,14 +53,17 @@ import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.token.handlers.grant.AbstractAuthorizationGrantHandler;
-import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.identity.oauth2.util.X509CredentialImpl;
 import org.wso2.carbon.idp.mgt.IdentityProviderManagementException;
 import org.wso2.carbon.idp.mgt.IdentityProviderManager;
 
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * This implements SAML 2.0 Bearer Assertion Profile for OAuth 2.0 -
@@ -439,7 +442,9 @@ public class SAML2BearerGrantHandler extends AbstractAuthorizationGrantHandler {
           that Bearer Assertions are not replayed, by maintaining the set of used ID values for the length of
           time for which the Assertion would be considered valid based on the applicable NotOnOrAfter instant.
          */
-        if (notOnOrAfterFromConditions != null && notOnOrAfterFromConditions.compareTo(new DateTime()) < 1) {
+        long timestampSkewInMillis = OAuthServerConfiguration.getInstance().getTimeStampSkewInSeconds() * 1000;
+        if (notOnOrAfterFromConditions != null && notOnOrAfterFromConditions.plus(timestampSkewInMillis).isBeforeNow
+                ()) {
             // notOnOrAfter is an expired timestamp
             if (log.isDebugEnabled()){
                 log.debug("NotOnOrAfter is having an expired timestamp in Conditions element");
@@ -447,7 +452,7 @@ public class SAML2BearerGrantHandler extends AbstractAuthorizationGrantHandler {
             return false;
         }
 
-        if (notBeforeConditions != null && notBeforeConditions.compareTo(new DateTime()) >= 1) {
+        if (notBeforeConditions != null && notBeforeConditions.minus(timestampSkewInMillis).isAfterNow()) {
             // notBefore is an early timestamp
             if (log.isDebugEnabled()){
                 log.debug("NotBefore is having an early timestamp in Conditions element");
@@ -461,12 +466,12 @@ public class SAML2BearerGrantHandler extends AbstractAuthorizationGrantHandler {
             for (Map.Entry<DateTime, DateTime> entry : notOnOrAfterFromAndNotBeforeSubjectConfirmations.entrySet()) {
                 if (entry.getKey() != null) {
                     notOnOrAfterFromSubjectConfirmations = entry.getKey();
-                    if (entry.getKey().compareTo(new DateTime()) >= 1) {
+                    if (entry.getKey().plus(timestampSkewInMillis).isAfterNow()) {
                         validSubjectConfirmationDataExists = true;
                     }
                 }
                 if (entry.getValue() != null) {
-                    if (entry.getValue().compareTo(new DateTime()) < 1) {
+                    if (entry.getValue().minus(timestampSkewInMillis).isBeforeNow()) {
                         validSubjectConfirmationDataExists = true;
                     }
                 }
