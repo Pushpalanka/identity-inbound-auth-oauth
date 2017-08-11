@@ -58,7 +58,7 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
     public boolean validateGrant(OAuthTokenReqMessageContext tokReqMsgCtx)
             throws IdentityOAuth2Exception {
 
-        if (!super.validateGrant(tokReqMsgCtx)) {
+        if(!super.validateGrant(tokReqMsgCtx)){
             return false;
         }
 
@@ -80,7 +80,7 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
                         validationDataDO.getRefreshTokenState()) &&
                 !OAuthConstants.TokenStates.TOKEN_STATE_EXPIRED.equals(
                         validationDataDO.getRefreshTokenState())) {
-            if (log.isDebugEnabled()) {
+            if(log.isDebugEnabled()) {
                 log.debug("Access Token is not in 'ACTIVE' or 'EXPIRED' state for Client with " +
                         "Client Id : " + tokenReqDTO.getClientId());
             }
@@ -98,35 +98,45 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
             }
         }
 
-        AccessTokenDO accessTokenDO = tokenMgtDAO.retrieveLatestAccessToken(tokenReqDTO.getClientId(),
-                validationDataDO.getAuthorizedUser(),
-                userStoreDomain, OAuth2Util.buildScopeString(validationDataDO.getScope()), true);
+        if (!OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE.equals(validationDataDO.getRefreshTokenState())) {
+            List<AccessTokenDO> accessTokenDOs = tokenMgtDAO.retrieveLatestAccessTokens(
+                    tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser(), userStoreDomain,
+                    OAuth2Util.buildScopeString(validationDataDO.getScope()), true, 10);
+            boolean isLatest = false;
+            if (accessTokenDOs == null || accessTokenDOs.isEmpty()) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Error while retrieving the latest refresh token");
+                }
+                if (cacheEnabled) {
+                    clearCache(tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser().toString(),
+                               validationDataDO.getScope(), validationDataDO.getAccessToken());
+                }
+                return false;
+            } else {
+                for (AccessTokenDO token : accessTokenDOs) {
+                    if (refreshToken.equals(token.getRefreshToken())
+                            && OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE.equals(token.getTokenState())
+                            || OAuthConstants.TokenStates.TOKEN_STATE_EXPIRED.equals(token.getTokenState())) {
+                        isLatest = true;
+                    }
+                }
+            }
+            if (!isLatest) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Refresh token is not the latest.");
+                }
+                if (cacheEnabled) {
+                    clearCache(tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser().toString(),
+                            validationDataDO.getScope(), validationDataDO.getAccessToken());
+                }
+                return false;
+            }
 
-        if (accessTokenDO == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Error while retrieving the latest refresh token");
+                log.debug("Refresh token validation successful for Client id : " + tokenReqDTO.getClientId() +
+                          ", Authorized User : " + validationDataDO.getAuthorizedUser() +
+                          ", Token Scope : " + OAuth2Util.buildScopeString(validationDataDO.getScope()));
             }
-            if (cacheEnabled) {
-                clearCache(tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser().toString(),
-                        validationDataDO.getScope(), validationDataDO.getAccessToken());
-            }
-            return false;
-        } else if (!refreshToken.equals(accessTokenDO.getRefreshToken())) {
-            if (log.isDebugEnabled()) {
-                log.debug("Refresh token is not the latest.");
-            }
-            if (cacheEnabled) {
-                clearCache(tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser().toString(),
-                        validationDataDO.getScope(), validationDataDO.getAccessToken());
-            }
-            return false;
-        }
-
-        if (log.isDebugEnabled()) {
-            log.debug("Refresh token validation successful for " +
-                    "Client id : " + tokenReqDTO.getClientId() +
-                    ", Authorized User : " + validationDataDO.getAuthorizedUser() +
-                    ", Token Scope : " + OAuth2Util.buildScopeString(validationDataDO.getScope()));
         }
 
         tokReqMsgCtx.setAuthorizedUser(validationDataDO.getAuthorizedUser());
