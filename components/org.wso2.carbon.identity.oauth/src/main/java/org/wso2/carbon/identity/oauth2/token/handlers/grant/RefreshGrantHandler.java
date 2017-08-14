@@ -58,7 +58,7 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
     public boolean validateGrant(OAuthTokenReqMessageContext tokReqMsgCtx)
             throws IdentityOAuth2Exception {
 
-        if(!super.validateGrant(tokReqMsgCtx)){
+        if (!super.validateGrant(tokReqMsgCtx)) {
             return false;
         }
 
@@ -70,19 +70,16 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
                 tokenReqDTO.getClientId(), refreshToken);
 
         if (validationDataDO.getAccessToken() == null) {
-            log.debug("Invalid Refresh Token provided for Client with " +
-                    "Client Id : " + tokenReqDTO.getClientId());
+            log.debug("Invalid Refresh Token provided for Client with Client Id : " + tokenReqDTO.getClientId());
             return false;
         }
 
         if (validationDataDO.getRefreshTokenState() != null &&
-                !OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE.equals(
-                        validationDataDO.getRefreshTokenState()) &&
-                !OAuthConstants.TokenStates.TOKEN_STATE_EXPIRED.equals(
-                        validationDataDO.getRefreshTokenState())) {
-            if(log.isDebugEnabled()) {
-                log.debug("Access Token is not in 'ACTIVE' or 'EXPIRED' state for Client with " +
-                        "Client Id : " + tokenReqDTO.getClientId());
+                !OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE.equals(validationDataDO.getRefreshTokenState()) &&
+                !OAuthConstants.TokenStates.TOKEN_STATE_EXPIRED.equals(validationDataDO.getRefreshTokenState())) {
+            if (log.isDebugEnabled()) {
+                log.debug("Access Token is not in 'ACTIVE' or 'EXPIRED' state for Client with Client Id : "
+                        + tokenReqDTO.getClientId());
             }
             return false;
         }
@@ -90,22 +87,30 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
         String userStoreDomain = null;
         if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
             try {
-                userStoreDomain = OAuth2Util.getUserStoreDomainFromUserId(validationDataDO.getAuthorizedUser().toString());
+                userStoreDomain = OAuth2Util.getUserStoreDomainFromUserId(validationDataDO.getAuthorizedUser()
+                        .toString());
             } catch (IdentityOAuth2Exception e) {
-                String errorMsg = "Error occurred while getting user store domain for User ID : " + validationDataDO.getAuthorizedUser();
-                log.error(errorMsg, e);
+                String errorMsg = "Error occurred while getting user store domain for User ID : "
+                        + validationDataDO.getAuthorizedUser();
                 throw new IdentityOAuth2Exception(errorMsg, e);
             }
         }
 
         if (!OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE.equals(validationDataDO.getRefreshTokenState())) {
+
+            // IDENTITY-5827 Here we have made a pragmatic assumption, that is, at the worst case
+            // there can be maximum 10 access-tokens issued within a period of 1 second.
+            // So we have set the limit for the database query row count to 10.
             List<AccessTokenDO> accessTokenDOs = tokenMgtDAO.retrieveLatestAccessTokens(
                     tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser(), userStoreDomain,
                     OAuth2Util.buildScopeString(validationDataDO.getScope()), true, 10);
             boolean isLatest = false;
             if (accessTokenDOs == null || accessTokenDOs.isEmpty()) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Error while retrieving the latest refresh token");
+                    log.debug("No refresh tokens to be retrieved. ClientId: " + tokenReqDTO.getClientId()
+                            + ", Authorized user: " + validationDataDO.getAuthorizedUser()
+                            + ", User store Domain: " + userStoreDomain
+                            + ", Scope: " + OAuth2Util.buildScopeString(validationDataDO.getScope()));
                 }
                 if (cacheEnabled) {
                     clearCache(tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser().toString(),
@@ -123,7 +128,7 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
             }
             if (!isLatest) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Refresh token is not the latest.");
+                    log.debug("Refresh token is not the latest. " + refreshToken);
                 }
                 if (cacheEnabled) {
                     clearCache(tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser().toString(),
