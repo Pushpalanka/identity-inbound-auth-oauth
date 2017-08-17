@@ -307,7 +307,7 @@ public class TokenMgtDAO {
                         retryAttempt);
             }
         } catch (SQLIntegrityConstraintViolationException e) {
-
+            IdentityDatabaseUtil.rollBack(connection);
             if (retryAttempt >= tokenPersistRetryCount) {
                 log.error("'CON_APP_KEY' constrain violation retry count exceeds above the maximum count - " +
                         tokenPersistRetryCount);
@@ -320,8 +320,10 @@ public class TokenMgtDAO {
             recoverFromConAppKeyConstraintViolation(accessToken, consumerKey, accessTokenDO, connection,
                     userStoreDomain, retryAttempt + 1);
         } catch (DataTruncation e) {
+            IdentityDatabaseUtil.rollBack(connection);
             throw new IdentityOAuth2Exception("Invalid request", e);
         } catch (SQLException e) {
+            IdentityDatabaseUtil.rollBack(connection);
             // Handle constrain violation issue in JDBC drivers which does not throw
             // SQLIntegrityConstraintViolationException
             if (StringUtils.containsIgnoreCase(e.getMessage(), "CON_APP_KEY")) {
@@ -1052,6 +1054,7 @@ public class TokenMgtDAO {
             prepStmt.setString(3, tokenId);
             prepStmt.executeUpdate();
         } catch (SQLException e) {
+            IdentityDatabaseUtil.rollBack(connection);
             throw new IdentityOAuth2Exception("Error while updating Access Token with ID : " +
                     tokenId + " to Token State : " + tokenState, e);
         } finally {
@@ -2612,6 +2615,7 @@ public class TokenMgtDAO {
             }
 
             resultSet = prepStmt.executeQuery();
+            AccessTokenDO accessTokenDO = null;
 
             if (resultSet.next()) {
                 String accessToken = persistenceProcessor.getPreprocessedAccessTokenIdentifier(
@@ -2636,16 +2640,17 @@ public class TokenMgtDAO {
                 user.setTenantDomain(tenantDomain);
                 user.setUserStoreDomain(userDomain);
                 user.setAuthenticatedSubjectIdentifier(subjectIdentifier);
-                AccessTokenDO accessTokenDO = new AccessTokenDO(consumerKey, user, OAuth2Util.buildScopeArray
+                accessTokenDO = new AccessTokenDO(consumerKey, user, OAuth2Util.buildScopeArray
                         (scope), new Timestamp(issuedTime), new Timestamp(refreshTokenIssuedTime)
                         , validityPeriodInMillis, refreshTokenValidityPeriodInMillis, userType);
                 accessTokenDO.setAccessToken(accessToken);
                 accessTokenDO.setRefreshToken(refreshToken);
                 accessTokenDO.setTokenId(tokenId);
-                return accessTokenDO;
             }
-            return null;
+            connection.commit();
+            return accessTokenDO;
         } catch (SQLException e) {
+            IdentityDatabaseUtil.rollBack(connection);
             String errorMsg = "Error occurred while trying to retrieve latest 'ACTIVE' " +
                     "access token for Client ID : " + consumerKey + ", User ID : " + authzUser +
                     " and  Scope : " + scope;
