@@ -134,6 +134,7 @@ public class OAuthServerConfiguration {
     private Map<String, Properties> supportedClientAuthHandlerData = new HashMap<>();
     private List<ClientAuthenticationHandler> supportedClientAuthHandlers;
     private String saml2TokenCallbackHandlerName = null;
+    private String saml2BearerTokenUserType = "FEDERATED";
     private SAML2TokenCallbackHandler saml2TokenCallbackHandler = null;
     private Map<String, String> tokenValidatorClassNames = new HashMap();
     private boolean isAuthContextTokGenEnabled = false;
@@ -842,6 +843,10 @@ public class OAuthServerConfiguration {
         return isRevokeResponseHeadersEnabled;
     }
 
+    public String getSaml2BearerTokenUserType() {
+        return saml2BearerTokenUserType;
+    }
+
     private void parseOAuthCallbackHandlers(OMElement callbackHandlersElem) {
         if (callbackHandlersElem == null) {
             warnOnFaultyConfiguration("OAuthCallbackHandlers element is not available.");
@@ -1452,12 +1457,18 @@ public class OAuthServerConfiguration {
 
         OMElement saml2GrantElement =
                 oauthConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.SAML2_GRANT));
+        OMElement saml2BearerUserTypeElement = null;
         OMElement saml2TokenHandlerElement = null;
         if (saml2GrantElement != null) {
+            saml2BearerUserTypeElement = saml2GrantElement.getFirstChildWithName(getQNameWithIdentityNS
+                    (ConfigElements.SAML2_BEARER_USER_TYPE));
             saml2TokenHandlerElement = saml2GrantElement.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.SAML2_TOKEN_HANDLER));
         }
         if (saml2TokenHandlerElement != null && StringUtils.isNotBlank(saml2TokenHandlerElement.getText())) {
             saml2TokenCallbackHandlerName = saml2TokenHandlerElement.getText().trim();
+        }
+        if (saml2BearerUserTypeElement != null && StringUtils.isNotBlank(saml2BearerUserTypeElement.getText())) {
+            saml2BearerTokenUserType = saml2BearerUserTypeElement.getText().trim();
         }
     }
 
@@ -1744,6 +1755,7 @@ public class OAuthServerConfiguration {
         // SAML2 assertion profile configurations
         private static final String SAML2_GRANT = "SAML2Grant";
         private static final String SAML2_TOKEN_HANDLER = "SAML2TokenHandler";
+        private static final String SAML2_BEARER_USER_TYPE = "UserType";
 
         // To enable revoke response headers
         private static final String ENABLE_REVOKE_RESPONSE_HEADERS = "EnableRevokeResponseHeaders";
