@@ -58,6 +58,7 @@ import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.token.handlers.grant.AbstractAuthorizationGrantHandler;
+import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.identity.oauth2.util.X509CredentialImpl;
 import org.wso2.carbon.idp.mgt.IdentityProviderManagementException;
 import org.wso2.carbon.idp.mgt.IdentityProviderManager;
@@ -86,6 +87,7 @@ public class SAML2BearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
     public static final String FEDERATED_USER_DOMAIN_PREFIX = "FEDERATED";
     public static final String LOCAL_USER_TYPE = "LOCAL";
+    public static final String LEGACY_USER_TYPE = "LEGACY";
 
     @Override
     public void init() throws IdentityOAuth2Exception {
@@ -605,6 +607,10 @@ public class SAML2BearerGrantHandler extends AbstractAuthorizationGrantHandler {
             } catch (UserStoreException e) {
                 throw new IdentityOAuth2Exception("Error while building local user from given assertion", e);
             }
+        } else if (
+                LEGACY_USER_TYPE.equalsIgnoreCase(OAuthServerConfiguration.getInstance().getSaml2BearerTokenUserType())
+                        && assertion.getSubject() != null) {
+            createLegacyUser(tokReqMsgCtx, assertion);
         } else {
             if (IdentityApplicationConstants.RESIDENT_IDP_RESERVED_NAME
                     .equals(identityProvider.getIdentityProviderName())) {
@@ -617,6 +623,23 @@ public class SAML2BearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 setFederatedUser(tokReqMsgCtx, assertion, spTenantDomain);
             }
         }
+    }
+
+    /**
+     * This method is setting the username removing the domain name without checking whether the user is federated
+     * or not. This fix has done for support backward capability.
+     *
+     * @param tokReqMsgCtx Token request message context.
+     * @param assertion    SAML2 Assertion.
+     */
+    protected void createLegacyUser(OAuthTokenReqMessageContext tokReqMsgCtx, Assertion assertion) {
+        //Check whether NameID value is null before call this method.
+        String resourceOwnerUserName = assertion.getSubject().getNameID().getValue();
+        AuthenticatedUser user = OAuth2Util.getUserFromUserName(resourceOwnerUserName);
+
+        user.setAuthenticatedSubjectIdentifier(resourceOwnerUserName);
+        user.setFederatedUser(true);
+        tokReqMsgCtx.setAuthorizedUser(user);
     }
 
     /**
