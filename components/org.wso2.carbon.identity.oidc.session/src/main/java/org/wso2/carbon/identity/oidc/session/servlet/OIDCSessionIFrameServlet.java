@@ -78,6 +78,9 @@ public class OIDCSessionIFrameServlet extends HttpServlet {
         } catch (IdentityOAuth2Exception | InvalidOAuthClientException e) {
             log.error("Error while retrieving OAuth application information for the provided client id, "+  e.getMessage
                     ());
+            if(log.isTraceEnabled()){
+                log.error(e);
+            }
             response.getWriter().print(ERROR_RESPONSE);
         } catch (OIDCSessionManagerException e) {
             log.error(e.getMessage(), e);
