@@ -1,3 +1,21 @@
+/*
+ * Copyright (c) 2016, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *
+ *  WSO2 Inc. licenses this file to you under the Apache License,
+ *  Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package org.wso2.carbon.identity.oidc.session.servlet;
 
 import org.apache.commons.lang.StringUtils;
@@ -48,43 +66,11 @@ public class OIDCSessionIFrameServlet extends HttpServlet {
         try {
             if (StringUtils.isBlank(clientId)) {
                 throw new OIDCSessionManagerException(
-                        "Invalid request.\'client_id\' not found in request as parameter");
+                        "Invalid request. \'client_id\' not found in request as parameter");
             }
-            OAuthAppDAO oAuthAppDAO = new OAuthAppDAO();
-            OAuthAppDO oAuthAppDO = oAuthAppDAO.getAppInformation(clientId);
-            String configuredCallbackURL = oAuthAppDO.getCallbackUrl();
-            if (log.isDebugEnabled()) {
-                log.debug("Requested client_id : " + clientId + " Configured callbackUrl : " + configuredCallbackURL);
-            }
-            if (configuredCallbackURL.startsWith(OAuthConstants.CALLBACK_URL_REGEXP_PREFIX)) {
-                if (log.isDebugEnabled()) {
-                    log.debug("Regex found for callback url in service provider.");
-                }
-                String rpIFrameReqCallbackURL = request.getParameter(OIDCSessionConstants.OIDC_REDIRECT_URI_PARAM);
-                if (StringUtils.isBlank(rpIFrameReqCallbackURL)) {
-                    throw new OIDCSessionManagerException(
-                            "Invalid request.\'redirect_uri\' not found in request as parameter. It is "
-                            + "mandatory because of there is regex pattern for "
-                            + "callback url.");
-                } else {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Requested redirect_uri from rp IFrame : " + rpIFrameReqCallbackURL);
-                    }
-                    String regexp = configuredCallbackURL
-                            .substring(OAuthConstants.CALLBACK_URL_REGEXP_PREFIX.length());
-                    if (rpIFrameReqCallbackURL.matches(regexp)) {
-                        if (log.isDebugEnabled()) {
-                            log.debug("Requested redirect_uri is matched with the regex in service provider.");
-                        }
-                        configuredCallbackURL = rpIFrameReqCallbackURL;
-                    } else {
-                        throw new OIDCSessionManagerException(
-                                "Invalid request.\'redirect_uri\' is not matched with the regex that is "
-                                + "configured in the service provider.");
-                    }
-                }
-            }
-            String clientOrigin = OIDCSessionManagementUtil.getOrigin(configuredCallbackURL);
+            String callbackURL = getCallbackURL(request, clientId);
+            String clientOrigin = OIDCSessionManagementUtil.getOrigin(callbackURL);
+
             if (log.isDebugEnabled()) {
                 log.debug("Client Origin : " + clientOrigin);
             }
@@ -93,9 +79,53 @@ public class OIDCSessionIFrameServlet extends HttpServlet {
             log.error("Error while retrieving OAuth application information for the provided client id", e);
             response.getWriter().print(ERROR_RESPONSE);
         } catch (OIDCSessionManagerException e) {
-            log.error(e.getMessage());
+            log.error(e.getMessage(), e);
             response.getWriter().print(ERROR_RESPONSE);
         }
+    }
+
+    private String getCallbackURL(HttpServletRequest request, String clientId)
+            throws InvalidOAuthClientException, IdentityOAuth2Exception, OIDCSessionManagerException {
+
+        OAuthAppDAO oAuthAppDAO = new OAuthAppDAO();
+        OAuthAppDO oAuthAppDO = oAuthAppDAO.getAppInformation(clientId);
+        String configuredCallbackURL = oAuthAppDO.getCallbackUrl();
+        if (log.isDebugEnabled()) {
+            log.debug("Requested client_id : " + clientId + " Configured callbackUrl : " + configuredCallbackURL);
+        }
+        if (StringUtils.isBlank(configuredCallbackURL)) {
+            throw new OIDCSessionManagerException(
+                    "CallbackURL is empty in service provider configuration.");
+        }
+        if (configuredCallbackURL.startsWith(OAuthConstants.CALLBACK_URL_REGEXP_PREFIX)) {
+            if (log.isDebugEnabled()) {
+                log.debug("Regex value found for callback url in service provider.");
+            }
+            String rpIFrameReqCallbackURL = request.getParameter(OIDCSessionConstants.OIDC_REDIRECT_URI_PARAM);
+            if (StringUtils.isBlank(rpIFrameReqCallbackURL)) {
+                throw new OIDCSessionManagerException(
+                        "Invalid request. \'redirect_uri\' not found in request as parameter. It is "
+                        + "mandatory because of there is regex pattern for "
+                        + "callback url in service provider configuration.");
+            } else {
+                if (log.isDebugEnabled()) {
+                    log.debug("Requested redirect_uri from rp IFrame : " + rpIFrameReqCallbackURL);
+                }
+                String regexp = configuredCallbackURL
+                        .substring(OAuthConstants.CALLBACK_URL_REGEXP_PREFIX.length());
+                if (rpIFrameReqCallbackURL.matches(regexp)) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Requested redirect_uri is matched with the regex in service provider.");
+                    }
+                    configuredCallbackURL = rpIFrameReqCallbackURL;
+                } else {
+                    throw new OIDCSessionManagerException(
+                            "Invalid request. \'redirect_uri\' is not matched with the regex that is "
+                            + "configured in the service provider.");
+                }
+            }
+        }
+        return configuredCallbackURL;
     }
 
     private String getOPIFrame(String clientOrigin) {
@@ -114,7 +144,6 @@ public class OIDCSessionIFrameServlet extends HttpServlet {
             while ((i = inputStream.read()) > 0) {
                 opIFrame.append((char) i);
             }
-
         } catch (IOException e) {
             log.error("Failed to load OP IFrame", e);
         }
