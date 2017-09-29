@@ -4,21 +4,23 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.text.StrSubstitutor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth.common.exception.InvalidOAuthClientException;
 import org.wso2.carbon.identity.oauth.dao.OAuthAppDAO;
 import org.wso2.carbon.identity.oauth.dao.OAuthAppDO;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oidc.session.OIDCSessionConstants;
+import org.wso2.carbon.identity.oidc.session.OIDCSessionManagerException;
 import org.wso2.carbon.identity.oidc.session.util.OIDCSessionManagementUtil;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 public class OIDCSessionIFrameServlet extends HttpServlet {
 
@@ -37,31 +39,63 @@ public class OIDCSessionIFrameServlet extends HttpServlet {
     }
 
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
 
         response.setContentType("text/html");
-
         String clientId = request.getParameter(OIDCSessionConstants.OIDC_CLIENT_ID_PARAM);
-        if (StringUtils.isBlank(clientId)) {
+
+        try {
+            if (StringUtils.isBlank(clientId)) {
+                throw new OIDCSessionManagerException(
+                        "Invalid request.\'client_id\' not found in request as parameter");
+            }
+            OAuthAppDAO oAuthAppDAO = new OAuthAppDAO();
+            OAuthAppDO oAuthAppDO = oAuthAppDAO.getAppInformation(clientId);
+            String configuredCallbackURL = oAuthAppDO.getCallbackUrl();
             if (log.isDebugEnabled()) {
-                log.debug("Invalid request.\'client_id\' not found in request as parameter");
+                log.debug("Requested client_id : " + clientId + " Configured callbackUrl : " + configuredCallbackURL);
             }
-            response.getWriter().print(ERROR_RESPONSE);
-        } else {
-            try {
-                OAuthAppDAO oAuthAppDAO = new OAuthAppDAO();
-                OAuthAppDO oAuthAppDO = oAuthAppDAO.getAppInformation(clientId);
-
-                String clientOrigin = OIDCSessionManagementUtil.getOrigin(oAuthAppDO.getCallbackUrl());
-                response.getWriter().print(getOPIFrame(clientOrigin));
-            } catch (IdentityOAuth2Exception | InvalidOAuthClientException e) {
+            if (configuredCallbackURL.startsWith(OAuthConstants.CALLBACK_URL_REGEXP_PREFIX)) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Error while retrieving OAuth application information for the provided client id", e);
+                    log.debug("Regex found for callback url in service provider.");
                 }
-                response.getWriter().print(ERROR_RESPONSE);
+                String rpIFrameReqCallbackURL = request.getParameter(OIDCSessionConstants.OIDC_REDIRECT_URI_PARAM);
+                if (StringUtils.isBlank(rpIFrameReqCallbackURL)) {
+                    throw new OIDCSessionManagerException(
+                            "Invalid request.\'redirect_uri\' not found in request as parameter. It is "
+                            + "mandatory because of there is regex pattern for "
+                            + "callback url.");
+                } else {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Requested redirect_uri from rp IFrame : " + rpIFrameReqCallbackURL);
+                    }
+                    String regexp = configuredCallbackURL
+                            .substring(OAuthConstants.CALLBACK_URL_REGEXP_PREFIX.length());
+                    if (rpIFrameReqCallbackURL.matches(regexp)) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("Requested redirect_uri is matched with the regex in service provider.");
+                        }
+                        configuredCallbackURL = rpIFrameReqCallbackURL;
+                    } else {
+                        throw new OIDCSessionManagerException(
+                                "Invalid request.\'redirect_uri\' is not matched with the regex that is "
+                                + "configured in the service provider.");
+                    }
+                }
             }
+            String clientOrigin = OIDCSessionManagementUtil.getOrigin(configuredCallbackURL);
+            if (log.isDebugEnabled()) {
+                log.debug("Client Origin : " + clientOrigin);
+            }
+            response.getWriter().print(getOPIFrame(clientOrigin));
+        } catch (IdentityOAuth2Exception | InvalidOAuthClientException e) {
+            log.error("Error while retrieving OAuth application information for the provided client id", e);
+            response.getWriter().print(ERROR_RESPONSE);
+        } catch (OIDCSessionManagerException e) {
+            log.error(e.getMessage());
+            response.getWriter().print(ERROR_RESPONSE);
         }
-
     }
 
     private String getOPIFrame(String clientOrigin) {

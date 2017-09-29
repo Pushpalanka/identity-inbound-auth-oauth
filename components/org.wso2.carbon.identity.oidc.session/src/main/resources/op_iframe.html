@@ -5,6 +5,7 @@
         window.addEventListener("message", receiveMessage, false);
         function receiveMessage(e) {
             var origin = "${CLIENT_ORIGIN}"; // origin from client_id
+            alert(origin + " | " + e.origin);
             if (e.origin !== origin) {
                 return;
             }
