@@ -22,7 +22,7 @@ package org.wso2.carbon.identity.oidc.session;
 import org.wso2.carbon.identity.base.IdentityException;
 
 public class OIDCSessionManagerException extends IdentityException {
-    
+
     public OIDCSessionManagerException(String message) {
         super(message);
     }
