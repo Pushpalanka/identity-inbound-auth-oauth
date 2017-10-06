@@ -254,15 +254,11 @@ public class TokenMgtDAO {
         PreparedStatement insertTokenPrepStmt = null;
         PreparedStatement addScopePrepStmt = null;
 
-        String accessTokenStoreTable = "IDN_OAUTH2_ACCESS_TOKEN";
-        if (StringUtils.isNotBlank(userStoreDomain) &&
-                !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-            accessTokenStoreTable = accessTokenStoreTable + "_" + userStoreDomain;
-        }
+        String sql = OAuth2Util.getTokenPartitionedSqlByUserStore(SQLQueries.INSERT_OAUTH2_ACCESS_TOKEN,
+                userStoreDomain);
+        String sqlAddScopes = OAuth2Util.getTokenPartitionedSqlByUserStore(SQLQueries.INSERT_OAUTH2_TOKEN_SCOPE,
+                userStoreDomain);
 
-        String sql = SQLQueries.INSERT_OAUTH2_ACCESS_TOKEN.replaceAll("\\$accessTokenStoreTable",
-                accessTokenStoreTable);
-        String sqlAddScopes = SQLQueries.INSERT_OAUTH2_TOKEN_SCOPE;
         try {
             insertTokenPrepStmt = connection.prepareStatement(sql);
             insertTokenPrepStmt.setString(1, persistenceProcessor.getProcessedAccessTokenIdentifier(accessToken));
@@ -442,12 +438,8 @@ public class TokenMgtDAO {
                 sql = sql.replace("TOKEN_SCOPE_HASH=?", "TOKEN_SCOPE_HASH=? AND TOKEN_STATE='ACTIVE'");
             }
 
-            if (StringUtils.isNotEmpty(userStoreDomain) &&
-                    !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-                //logic to store access token into different tables when multiple user stores are configured.
-                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN + "_" +
-                        userStoreDomain);
-            }
+            sql = OAuth2Util.getTokenPartitionedSqlByUserStore(sql, userStoreDomain);
+
             if (!isUsernameCaseSensitive) {
                 sql = sql.replace(AUTHZ_USER, LOWER_AUTHZ_USER);
             }
@@ -553,11 +545,9 @@ public class TokenMgtDAO {
             if (includeExpired) {
                 sql = SQLQueries.RETRIEVE_ACTIVE_EXPIRED_ACCESS_TOKEN_BY_CLIENT_ID_USER;
             }
-            if (StringUtils.isNotEmpty(userStoreDomain) &&
-                    !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN + "_" +
-                        userStoreDomain);
-            }
+
+            sql = OAuth2Util.getTokenPartitionedSqlByUserStore(sql, userStoreDomain);
+
             if (!isUsernameCaseSensitive) {
                 sql = sql.replace(AUTHZ_USER, LOWER_AUTHZ_USER);
             }
@@ -821,56 +811,26 @@ public class TokenMgtDAO {
         Connection connection = IdentityDatabaseUtil.getDBConnection();
         PreparedStatement prepStmt = null;
         ResultSet resultSet = null;
-        String userStoreDomain = null;
-        String sql = null;
-        String mySqlQuery;
-        String db2Query;
-        String oracleQuery;
-        String msSqlQuery;
-        String postgreSqlQuery;
-        String informixQuery;
+        String sql;
 
         try {
-            if (OAuth2Util.checkAccessTokenPartitioningEnabled() &&
-                    OAuth2Util.checkUserNameAssertionEnabled()) {
-                userStoreDomain = OAuth2Util.getUserStoreDomainFromAccessToken(refreshToken);
-            }
-
-            String accessTokenStoreTable = "IDN_OAUTH2_ACCESS_TOKEN";
-            if (StringUtils.isNotBlank(userStoreDomain) &&
-                    !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-                accessTokenStoreTable = accessTokenStoreTable + "_" + userStoreDomain;
-            }
-
-            mySqlQuery = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_MYSQL.replaceAll("\\$accessTokenStoreTable",
-                    accessTokenStoreTable);
-            db2Query = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_DB2SQL.replaceAll("\\$accessTokenStoreTable",
-                    accessTokenStoreTable);
-            oracleQuery = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_ORACLE.replaceAll("\\$accessTokenStoreTable",
-                    accessTokenStoreTable);
-            msSqlQuery = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_MSSQL.replaceAll("\\$accessTokenStoreTable",
-                    accessTokenStoreTable);
-            informixQuery = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_INFORMIX.replaceAll
-                    ("\\$accessTokenStoreTable", accessTokenStoreTable);
-            postgreSqlQuery = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_POSTGRESQL.replaceAll
-                    ("\\$accessTokenStoreTable", accessTokenStoreTable);
-
             if (connection.getMetaData().getDriverName().contains("MySQL")
                     || connection.getMetaData().getDriverName().contains("H2")) {
-                sql = mySqlQuery;
+                sql = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_MYSQL;
             } else if (connection.getMetaData().getDatabaseProductName().contains("DB2")) {
-                sql = db2Query;
-            } else if (connection.getMetaData().getDriverName().contains("MS SQL")) {
-                sql = msSqlQuery;
-            } else if (connection.getMetaData().getDriverName().contains("Microsoft")) {
-                sql = msSqlQuery;
+                sql = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_DB2SQL;
+            } else if (connection.getMetaData().getDriverName().contains("MS SQL")
+                    || connection.getMetaData().getDriverName().contains("Microsoft")) {
+                sql = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_MSSQL;
             } else if (connection.getMetaData().getDriverName().contains("PostgreSQL")) {
-                sql = postgreSqlQuery;
+                sql = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_POSTGRESQL;
             } else if (connection.getMetaData().getDriverName().contains("INFORMIX")) {
-                sql = informixQuery;
+                sql = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_INFORMIX;
             } else {
-                sql = oracleQuery;
+                sql = SQLQueries.RETRIEVE_ACCESS_TOKEN_VALIDATION_DATA_ORACLE;
             }
+
+            sql = OAuth2Util.getTokenPartitionedSqlByToken(sql, refreshToken);
 
             if (refreshToken == null) {
                 sql = sql.replace("REFRESH_TOKEN = ?", "REFRESH_TOKEN IS NULL");
@@ -942,16 +902,8 @@ public class TokenMgtDAO {
         Connection connection = IdentityDatabaseUtil.getDBConnection();
         PreparedStatement prepStmt = null;
         ResultSet resultSet = null;
-        String userStoreDomain = null;
 
         try {
-
-            //select the user store domain when multiple user stores are configured.
-            if (OAuth2Util.checkAccessTokenPartitioningEnabled() &&
-                    OAuth2Util.checkUserNameAssertionEnabled()) {
-                userStoreDomain = OAuth2Util.getUserStoreDomainFromAccessToken(accessTokenIdentifier);
-            }
-
             String sql;
 
             if (includeExpired) {
@@ -960,11 +912,7 @@ public class TokenMgtDAO {
                 sql = SQLQueries.RETRIEVE_ACTIVE_ACCESS_TOKEN;
             }
 
-            if (StringUtils.isNotBlank(userStoreDomain) &&
-                    !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN + "_" +
-                        userStoreDomain);
-            }
+            sql = OAuth2Util.getTokenPartitionedSqlByToken(sql, accessTokenIdentifier);
 
             prepStmt = connection.prepareStatement(sql);
 
@@ -1044,10 +992,7 @@ public class TokenMgtDAO {
         try {
 
             String sql = SQLQueries.UPDATE_TOKE_STATE;
-            if (StringUtils.isNotBlank(userStoreDomain) &&
-                    !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN + "_" +
-                        userStoreDomain);            }
+            sql = OAuth2Util.getTokenPartitionedSqlByUserStore(sql, userStoreDomain);
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setString(1, tokenState);
             prepStmt.setString(2, tokenStateId);
@@ -1126,19 +1071,13 @@ public class TokenMgtDAO {
 
     public void revokeTokensIndividual(String[] tokens) throws IdentityOAuth2Exception {
 
-        String accessTokenStoreTable = OAuthConstants.ACCESS_TOKEN_STORE_TABLE;
         Connection connection = IdentityDatabaseUtil.getDBConnection();
         PreparedStatement ps = null;
         try {
             connection.setAutoCommit(false);
 
             for (String token : tokens) {
-                if (OAuth2Util.checkAccessTokenPartitioningEnabled() &&
-                        OAuth2Util.checkUserNameAssertionEnabled()) {
-                    accessTokenStoreTable = OAuth2Util.getAccessTokenStoreTableFromAccessToken(token);
-                }
-                String sqlQuery = SQLQueries.REVOKE_ACCESS_TOKEN.replace(
-                        IDN_OAUTH2_ACCESS_TOKEN, accessTokenStoreTable);
+                String sqlQuery = OAuth2Util.getTokenPartitionedSqlByToken(SQLQueries.REVOKE_ACCESS_TOKEN, token);
                 ps = connection.prepareStatement(sqlQuery);
                 ps.setString(1, OAuthConstants.TokenStates.TOKEN_STATE_REVOKED);
                 ps.setString(2, UUID.randomUUID().toString());
@@ -1168,16 +1107,11 @@ public class TokenMgtDAO {
      */
     public void revokeToken(String tokenId, String userId) throws IdentityOAuth2Exception {
 
-        String accessTokenStoreTable = OAuthConstants.ACCESS_TOKEN_STORE_TABLE;
         Connection connection = IdentityDatabaseUtil.getDBConnection();
         PreparedStatement ps = null;
         try {
-            if (OAuth2Util.checkAccessTokenPartitioningEnabled() &&
-                    OAuth2Util.checkUserNameAssertionEnabled()) {
-                accessTokenStoreTable = OAuth2Util.getAccessTokenStoreTableFromUserId(userId);
-            }
-            String sqlQuery = SQLQueries.REVOKE_ACCESS_TOKEN_BY_TOKEN_ID.replace(
-                    IDN_OAUTH2_ACCESS_TOKEN, accessTokenStoreTable);
+            String sqlQuery = OAuth2Util.getTokenPartitionedSqlByUserId(SQLQueries.REVOKE_ACCESS_TOKEN_BY_TOKEN_ID,
+                    userId);
             ps = connection.prepareStatement(sqlQuery);
             ps.setString(1, OAuthConstants.TokenStates.TOKEN_STATE_REVOKED);
             ps.setString(2, UUID.randomUUID().toString());
@@ -1209,12 +1143,8 @@ public class TokenMgtDAO {
         Set<String> accessTokens = new HashSet<>();
         boolean isUsernameCaseSensitive = IdentityUtil.isUserStoreInUsernameCaseSensitive(authenticatedUser.toString());
         try {
-            if (OAuth2Util.checkAccessTokenPartitioningEnabled() &&
-                    OAuth2Util.checkUserNameAssertionEnabled()) {
-                accessTokenStoreTable = OAuth2Util.getAccessTokenStoreTableFromUserId(authenticatedUser.toString());
-            }
-            String sqlQuery = SQLQueries.GET_ACCESS_TOKEN_BY_AUTHZUSER.replace(
-                    IDN_OAUTH2_ACCESS_TOKEN, accessTokenStoreTable);
+            String sqlQuery = OAuth2Util.getTokenPartitionedSqlByUserId(SQLQueries.GET_ACCESS_TOKEN_BY_AUTHZUSER,
+                    authenticatedUser.toString());
             if (!isUsernameCaseSensitive) {
                 sqlQuery = sqlQuery.replace(AUTHZ_USER, LOWER_AUTHZ_USER);
             }
@@ -1309,12 +1239,28 @@ public class TokenMgtDAO {
     }
 
     public Set<String> getActiveTokensForConsumerKey(String consumerKey) throws IdentityOAuth2Exception {
+
+        Set<String> activeTokens = getActiveTokensForConsumerKey(consumerKey, IdentityUtil.getPrimaryDomainName());
+
+        if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
+            Map<String, String> availableDomainMappings = OAuth2Util.getAvailableUserStoreDomainMappings();
+            for (Map.Entry<String, String> availableDomainMapping : availableDomainMappings.entrySet()) {
+                activeTokens.addAll(getActiveTokensForConsumerKey(consumerKey, availableDomainMapping.getKey()));
+            }
+        }
+        return activeTokens;
+    }
+
+    public Set<String> getActiveTokensForConsumerKey(String consumerKey, String userStoreDomain)
+            throws IdentityOAuth2Exception {
+
         Connection connection = IdentityDatabaseUtil.getDBConnection();
         PreparedStatement ps = null;
         ResultSet rs = null;
         Set<String> accessTokens = new HashSet<>();
         try {
-            String sqlQuery = SQLQueries.GET_ACCESS_TOKENS_FOR_CONSUMER_KEY;
+            String sqlQuery = OAuth2Util.getTokenPartitionedSqlByUserStore(SQLQueries.
+                    GET_ACCESS_TOKENS_FOR_CONSUMER_KEY, userStoreDomain);
             ps = connection.prepareStatement(sqlQuery);
             ps.setString(1, consumerKey);
             ps.setString(2, OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE);
@@ -1334,13 +1280,33 @@ public class TokenMgtDAO {
     }
 
     public Set<AccessTokenDO> getActiveDetailedTokensForConsumerKey(String consumerKey) throws IdentityOAuth2Exception {
+
+        Set<AccessTokenDO> accessTokenDOs = getActiveDetailedTokensForConsumerKey(consumerKey,
+                IdentityUtil.getPrimaryDomainName());
+
+        if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
+            Map<String, String> availableDomainMappings = OAuth2Util.getAvailableUserStoreDomainMappings();
+            for (Map.Entry<String, String> availableDomainMapping : availableDomainMappings.entrySet()) {
+                accessTokenDOs.addAll(getActiveDetailedTokensForConsumerKey(consumerKey,
+                        availableDomainMapping.getKey()));
+            }
+        }
+        return accessTokenDOs;
+    }
+
+    public Set<AccessTokenDO> getActiveDetailedTokensForConsumerKey(String consumerKey, String userStoreDomain)
+            throws IdentityOAuth2Exception {
+
         Connection connection = IdentityDatabaseUtil.getDBConnection();
         PreparedStatement ps = null;
         ResultSet rs = null;
         Set<AccessTokenDO> activeDetailedTokens = new HashSet<>();
         Map<String, AccessTokenDO> tokenMap = new HashMap<>();
+
         try {
-            String sqlQuery = SQLQueries.GET_ACTIVE_DETAILS_FOR_CONSUMER_KEY;
+            String sqlQuery = OAuth2Util.getTokenPartitionedSqlByUserStore(SQLQueries.
+                    GET_ACTIVE_DETAILS_FOR_CONSUMER_KEY, userStoreDomain);
+
             ps = connection.prepareStatement(sqlQuery);
             ps.setString(1, consumerKey);
             ps.setString(2, OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE);
@@ -1445,7 +1411,6 @@ public class TokenMgtDAO {
      */
     public Set<String> getAllTimeAuthorizedClientIds(AuthenticatedUser authzUser) throws IdentityOAuth2Exception {
 
-        String accessTokenStoreTable = OAuthConstants.ACCESS_TOKEN_STORE_TABLE;
         PreparedStatement ps = null;
         Connection connection = IdentityDatabaseUtil.getDBConnection();
         ResultSet rs = null;
@@ -1457,12 +1422,10 @@ public class TokenMgtDAO {
 
         try {
             int tenantId = OAuth2Util.getTenantId(tenantDomain);
-            if (OAuth2Util.checkAccessTokenPartitioningEnabled() &&
-                    OAuth2Util.checkUserNameAssertionEnabled()) {
-                accessTokenStoreTable = OAuth2Util.getAccessTokenStoreTableFromUserId(authzUser.toString());
-            }
-            String sqlQuery = SQLQueries.GET_DISTINCT_APPS_AUTHORIZED_BY_USER_ALL_TIME.replace(
-                    IDN_OAUTH2_ACCESS_TOKEN, accessTokenStoreTable);
+
+            String sqlQuery = OAuth2Util.getTokenPartitionedSqlByUserId(SQLQueries.
+                    GET_DISTINCT_APPS_AUTHORIZED_BY_USER_ALL_TIME, authzUser.toString());
+
             if (!isUsernameCaseSensitive) {
                 sqlQuery = sqlQuery.replace(AUTHZ_USER, LOWER_AUTHZ_USER);
             }
@@ -1715,13 +1678,28 @@ public class TokenMgtDAO {
 
     public Set<AccessTokenDO> getAccessTokensOfTenant(int tenantId) throws IdentityOAuth2Exception {
 
+        Set<AccessTokenDO> accessTokenDOs = getAccessTokensOfTenant(tenantId, IdentityUtil.getPrimaryDomainName());
+
+        if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
+            Map<String, String> availableDomainMappings = OAuth2Util.getAvailableUserStoreDomainMappings();
+            for (Map.Entry<String, String> availableDomainMapping : availableDomainMappings.entrySet()) {
+                accessTokenDOs.addAll(getAccessTokensOfTenant(tenantId, availableDomainMapping.getKey()));
+            }
+        }
+        return accessTokenDOs;
+    }
+
+    public Set<AccessTokenDO> getAccessTokensOfTenant(int tenantId, String userStoreDomain)
+            throws IdentityOAuth2Exception {
+
         Connection connection = IdentityDatabaseUtil.getDBConnection();
 
         PreparedStatement prepStmt = null;
         ResultSet resultSet = null;
         Map<String, AccessTokenDO> accessTokenDOMap = new HashMap<>();
         try {
-            String sql = SQLQueries.LIST_ALL_TOKENS_IN_TENANT;
+            String sql = OAuth2Util.getTokenPartitionedSqlByUserStore(SQLQueries.LIST_ALL_TOKENS_IN_TENANT,
+                    userStoreDomain);
 
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setInt(1, tenantId);
@@ -1742,7 +1720,7 @@ public class TokenMgtDAO {
                     String[] scope = OAuth2Util.buildScopeArray(resultSet.getString(8));
                     String tokenId = resultSet.getString(9);
                     String authzUser = resultSet.getString(10);
-                    String userStoreDomain = resultSet.getString(11);
+                    userStoreDomain = resultSet.getString(11);
                     String consumerKey = resultSet.getString(12);
 
                     AuthenticatedUser user = new AuthenticatedUser();
@@ -1785,7 +1763,8 @@ public class TokenMgtDAO {
         ResultSet resultSet = null;
         Map<String, AccessTokenDO> accessTokenDOMap = new HashMap<>();
         try {
-            String sql = SQLQueries.LIST_ALL_TOKENS_IN_USER_STORE;
+            String sql = OAuth2Util.getTokenPartitionedSqlByUserStore(SQLQueries.LIST_ALL_TOKENS_IN_USER_STORE,
+                    userStoreDomain);
 
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setInt(1, tenantId);
@@ -2041,12 +2020,31 @@ public class TokenMgtDAO {
 
     public String getTokenIdByToken(String token) throws IdentityOAuth2Exception {
 
+        String tokenId = getTokenIdByToken(token, IdentityUtil.getPrimaryDomainName());
+
+        if (tokenId == null && OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.
+                checkUserNameAssertionEnabled()) {
+            Map<String, String> availableDomainMappings = OAuth2Util.getAvailableUserStoreDomainMappings();
+            for (Map.Entry<String, String> availableDomainMapping: availableDomainMappings.entrySet()) {
+                tokenId = getTokenIdByToken(token, availableDomainMapping.getKey());
+                if (tokenId != null) {
+                    break;
+                }
+            }
+        }
+
+        return tokenId;
+    }
+
+    public String getTokenIdByToken(String token, String userStoreDomain) throws IdentityOAuth2Exception {
+
         Connection connection = IdentityDatabaseUtil.getDBConnection();
 
         PreparedStatement prepStmt = null;
         ResultSet resultSet = null;
         try {
-            String sql = SQLQueries.RETRIEVE_TOKEN_ID_BY_TOKEN;
+            String sql = OAuth2Util.getTokenPartitionedSqlByUserStore(SQLQueries.RETRIEVE_TOKEN_ID_BY_TOKEN,
+                    userStoreDomain);
 
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setString(1, persistenceProcessor.getProcessedAccessTokenIdentifier(token));
@@ -2071,12 +2069,31 @@ public class TokenMgtDAO {
 
     public String getTokenByTokenId(String tokenId) throws IdentityOAuth2Exception {
 
+        String token = getTokenByTokenId(tokenId, IdentityUtil.getPrimaryDomainName());
+
+        if (token == null && OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.
+                checkUserNameAssertionEnabled()) {
+            Map<String, String> availableDomainMappings = OAuth2Util.getAvailableUserStoreDomainMappings();
+            for (Map.Entry<String, String> availableDomainMapping: availableDomainMappings.entrySet()) {
+                token = getTokenByTokenId(tokenId, availableDomainMapping.getKey());
+                if (token != null) {
+                    break;
+                }
+            }
+        }
+
+        return token;
+    }
+
+    public String getTokenByTokenId(String tokenId, String userStoreDomain) throws IdentityOAuth2Exception {
+
         Connection connection = IdentityDatabaseUtil.getDBConnection();
 
         PreparedStatement prepStmt = null;
         ResultSet resultSet = null;
         try {
-            String sql = SQLQueries.RETRIEVE_TOKEN_BY_TOKEN_ID;
+            String sql = OAuth2Util.getTokenPartitionedSqlByUserStore(SQLQueries.RETRIEVE_TOKEN_BY_TOKEN_ID,
+                    userStoreDomain);
 
             prepStmt = connection.prepareStatement(sql);
             prepStmt.setString(1, tokenId);
@@ -2249,12 +2266,8 @@ public class TokenMgtDAO {
                 String accessTokenStoreTable = OAuthConstants.ACCESS_TOKEN_STORE_TABLE;
                 if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
                     for (String token : accessTokens) {
-                        if (OAuth2Util.checkAccessTokenPartitioningEnabled() &&
-                                OAuth2Util.checkUserNameAssertionEnabled()) {
-                            accessTokenStoreTable = OAuth2Util.getAccessTokenStoreTableFromAccessToken(token);
-                        }
-                        String sqlQuery = SQLQueries.REVOKE_APP_ACCESS_TOKEN.replace(
-                                IDN_OAUTH2_ACCESS_TOKEN, accessTokenStoreTable);
+                        String sqlQuery = OAuth2Util.getTokenPartitionedSqlByToken(SQLQueries.REVOKE_APP_ACCESS_TOKEN,
+                                token);
 
                         revokeActiveTokensStatement = connection.prepareStatement(sqlQuery);
                         revokeActiveTokensStatement.setString(1, OAuthConstants.TokenStates.TOKEN_STATE_REVOKED);
@@ -2439,12 +2452,8 @@ public class TokenMgtDAO {
                 sql = sql.replace("LIMIT 1", "LIMIT " + Integer.toString(limit));
             }
 
-            if (StringUtils.isNotEmpty(userStoreDomain) &&
-                !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-                //logic to store access token into different tables when multiple user stores are configured.
-                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN
-                        + "_" + userStoreDomain);
-            }
+            sql = OAuth2Util.getTokenPartitionedSqlByUserStore(sql, userStoreDomain);
+
             if (!isUsernameCaseSensitive) {
                 sql = sql.replace(AUTHZ_USER, LOWER_AUTHZ_USER);
             }
@@ -2551,9 +2560,8 @@ public class TokenMgtDAO {
                     sql = SQLQueries.RETRIEVE_LATEST_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_MYSQL;
                 } else if (connection.getMetaData().getDatabaseProductName().contains("DB2")) {
                     sql = SQLQueries.RETRIEVE_LATEST_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_DB2SQL;
-                } else if (connection.getMetaData().getDriverName().contains("MS SQL")) {
-                    sql = SQLQueries.RETRIEVE_LATEST_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_MSSQL;
-                } else if (connection.getMetaData().getDriverName().contains("Microsoft")) {
+                } else if (connection.getMetaData().getDriverName().contains("MS SQL")
+                        || connection.getMetaData().getDriverName().contains("Microsoft")) {
                     sql = SQLQueries.RETRIEVE_LATEST_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_MSSQL;
                 } else if (connection.getMetaData().getDriverName().contains("PostgreSQL")) {
                     sql = SQLQueries.RETRIEVE_LATEST_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_POSTGRESQL;
@@ -2570,9 +2578,8 @@ public class TokenMgtDAO {
                     sql = SQLQueries.RETRIEVE_LATEST_NON_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_MYSQL;
                 } else if (connection.getMetaData().getDatabaseProductName().contains("DB2")) {
                     sql = SQLQueries.RETRIEVE_LATEST_NON_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_DB2SQL;
-                } else if (connection.getMetaData().getDriverName().contains("MS SQL")) {
-                    sql = SQLQueries.RETRIEVE_LATEST_NON_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_MSSQL;
-                } else if (connection.getMetaData().getDriverName().contains("Microsoft")) {
+                } else if (connection.getMetaData().getDriverName().contains("MS SQL")
+                        || connection.getMetaData().getDriverName().contains("Microsoft")) {
                     sql = SQLQueries.RETRIEVE_LATEST_NON_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_MSSQL;
                 } else if (connection.getMetaData().getDriverName().contains("PostgreSQL")) {
                     sql = SQLQueries.RETRIEVE_LATEST_NON_ACTIVE_ACCESS_TOKEN_BY_CLIENT_ID_USER_SCOPE_POSTGRESQL;
@@ -2585,12 +2592,8 @@ public class TokenMgtDAO {
                 }
             }
 
-            if (StringUtils.isNotEmpty(userStoreDomain) &&
-                    !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-                //logic to store access token into different tables when multiple user stores are configured.
-                sql = sql.replaceAll("\\b" + IDN_OAUTH2_ACCESS_TOKEN + "\\b", IDN_OAUTH2_ACCESS_TOKEN + "_" +
-                        userStoreDomain);
-            }
+            sql = OAuth2Util.getTokenPartitionedSqlByUserStore(sql, userStoreDomain);
+
             if (!isUsernameCaseSensitive) {
                 sql = sql.replace(AUTHZ_USER, LOWER_AUTHZ_USER);
             }
