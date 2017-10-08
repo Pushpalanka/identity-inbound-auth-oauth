@@ -169,7 +169,7 @@ public class OAuthServerConfiguration {
 
     // property added to fix IDENTITY-4112 in backward compatible manner
     private boolean isRevokeResponseHeadersEnabled = true;
-    // property to make DisplayName property to used in consent page
+    // property to make DisplayName property to be used in consent page
     private boolean showDisplayNameInConsentPage=false;
 
     private OAuthServerConfiguration() {

@@ -976,7 +976,7 @@ public class OAuth2AuthzEndpoint {
             return applicationManagementService.getServiceProvider(oAuthAppDO.getApplicationName(), tenantDomain);
         } catch (IdentityOAuth2Exception | InvalidOAuthClientException | IdentityApplicationManagementException e) {
             String msg = "Couldn't retrieve Service Provider for clientId:" + clientId;
-            log.error(msg);
+            log.error(msg, e);
             throw new OAuthSystemException(msg, e);
         }
     }

@@ -405,7 +405,7 @@ public class EndpointUtil {
                     consentPage += URLEncoder.encode(params.getApplicationName(), "UTF-8");
                 }
                 consentPage = consentPage + "&" + OAuthConstants.OAuth20Params.SCOPE + "=" + URLEncoder.encode
-                        (EndpointUtil.getScope(params), "ISO-8859-1") + "&" + OAuthConstants.SESSION_DATA_KEY_CONSENT
+                        (EndpointUtil.getScope(params), "UTF-8") + "&" + OAuthConstants.SESSION_DATA_KEY_CONSENT
                         + "=" + URLEncoder.encode(sessionDataKeyConsent, "UTF-8") + "&spQueryParams=" + queryString;
             } else {
                 throw new OAuthSystemException("Error while retrieving the application name");
