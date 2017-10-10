@@ -542,7 +542,7 @@ public class OAuth2Util {
         String mappedUserStoreDomain = userStoreDomain;
 
         Map<String, String> availableDomainMappings = OAuth2Util.getAvailableUserStoreDomainMappings();
-        if (availableDomainMappings.containsKey(userStoreDomain)) {
+        if (userStoreDomain != null && availableDomainMappings.containsKey(userStoreDomain)) {
             mappedUserStoreDomain = availableDomainMappings.get(userStoreDomain);
         }
 
@@ -599,27 +599,33 @@ public class OAuth2Util {
 
     public static String getTokenPartitionedSqlByUserId(String sql, String userId) throws IdentityOAuth2Exception {
 
-        if (log.isDebugEnabled()) {
-            if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
+        String partitionedSql = sql;
+
+        if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
+            if (log.isDebugEnabled()) {
                 log.debug("Calculating partitioned sql for userId: " + userId);
             }
-        }
 
-        String userStore = null;
-        if (userId != null) {
-            String[] strArr = userId.split(UserCoreConstants.DOMAIN_SEPARATOR);
-            if (strArr != null && strArr.length > 1) {
-                userStore = strArr[0];
+            String userStore = null;
+            if (userId != null) {
+                String[] strArr = userId.split(UserCoreConstants.DOMAIN_SEPARATOR);
+                if (strArr != null && strArr.length > 1) {
+                    userStore = strArr[0];
+                }
             }
+
+            partitionedSql = OAuth2Util.getTokenPartitionedSqlByUserStore(sql, userStore);
         }
 
-        return OAuth2Util.getTokenPartitionedSqlByUserStore(sql, userStore);
+        return partitionedSql;
     }
 
     public static String getTokenPartitionedSqlByToken(String sql, String token) throws IdentityOAuth2Exception {
 
-        if (log.isDebugEnabled()) {
-            if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
+        String partitionedSql = sql;
+
+        if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
+            if (log.isDebugEnabled()) {
                 if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
                     log.debug("Calculating partitioned sql for token: " + token);
                 } else {
@@ -627,10 +633,12 @@ public class OAuth2Util {
                     log.debug("Calculating partitioned sql for token");
                 }
             }
+
+            String userId = OAuth2Util.getUserIdFromAccessToken(token); //i.e: 'foo.com/admin' or 'admin'
+            partitionedSql = OAuth2Util.getTokenPartitionedSqlByUserId(sql, userId);
         }
 
-        String userId = OAuth2Util.getUserIdFromAccessToken(token); //i.e: 'foo.com/admin' or 'admin'
-        return OAuth2Util.getTokenPartitionedSqlByUserId(sql, userId);
+        return partitionedSql;
     }
 
     public static String getUserStoreDomainFromUserId(String userId)
@@ -687,7 +695,7 @@ public class OAuth2Util {
         String userId = null;
         String decodedKey = new String(Base64.decodeBase64(apiKey.getBytes(Charsets.UTF_8)), Charsets.UTF_8);
         String[] tmpArr = decodedKey.split(":");
-        if (tmpArr != null) {
+        if (tmpArr != null && tmpArr.length > 1) {
             userId = tmpArr[1];
         }
         return userId;

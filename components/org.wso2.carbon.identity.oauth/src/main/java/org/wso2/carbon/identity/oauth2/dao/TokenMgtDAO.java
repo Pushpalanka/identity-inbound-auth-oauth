@@ -1251,7 +1251,7 @@ public class TokenMgtDAO {
         return activeTokens;
     }
 
-    public Set<String> getActiveTokensForConsumerKey(String consumerKey, String userStoreDomain)
+    private Set<String> getActiveTokensForConsumerKey(String consumerKey, String userStoreDomain)
             throws IdentityOAuth2Exception {
 
         Connection connection = IdentityDatabaseUtil.getDBConnection();
@@ -1294,7 +1294,7 @@ public class TokenMgtDAO {
         return accessTokenDOs;
     }
 
-    public Set<AccessTokenDO> getActiveDetailedTokensForConsumerKey(String consumerKey, String userStoreDomain)
+    private Set<AccessTokenDO> getActiveDetailedTokensForConsumerKey(String consumerKey, String userStoreDomain)
             throws IdentityOAuth2Exception {
 
         Connection connection = IdentityDatabaseUtil.getDBConnection();
@@ -1689,7 +1689,7 @@ public class TokenMgtDAO {
         return accessTokenDOs;
     }
 
-    public Set<AccessTokenDO> getAccessTokensOfTenant(int tenantId, String userStoreDomain)
+    private Set<AccessTokenDO> getAccessTokensOfTenant(int tenantId, String userStoreDomain)
             throws IdentityOAuth2Exception {
 
         Connection connection = IdentityDatabaseUtil.getDBConnection();
@@ -2036,7 +2036,7 @@ public class TokenMgtDAO {
         return tokenId;
     }
 
-    public String getTokenIdByToken(String token, String userStoreDomain) throws IdentityOAuth2Exception {
+    private String getTokenIdByToken(String token, String userStoreDomain) throws IdentityOAuth2Exception {
 
         Connection connection = IdentityDatabaseUtil.getDBConnection();
 
@@ -2085,7 +2085,7 @@ public class TokenMgtDAO {
         return token;
     }
 
-    public String getTokenByTokenId(String tokenId, String userStoreDomain) throws IdentityOAuth2Exception {
+    private String getTokenByTokenId(String tokenId, String userStoreDomain) throws IdentityOAuth2Exception {
 
         Connection connection = IdentityDatabaseUtil.getDBConnection();
 
