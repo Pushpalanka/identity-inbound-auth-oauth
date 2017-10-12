@@ -25,6 +25,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
+import org.wso2.carbon.identity.base.IdentityConstants;
 import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.util.IdentityDatabaseUtil;
 import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
@@ -249,6 +250,15 @@ public class TokenMgtDAO {
     private void storeAccessToken(String accessToken, String consumerKey, AccessTokenDO accessTokenDO,
                                   Connection connection, String userStoreDomain, int retryAttempt)
             throws IdentityOAuth2Exception {
+
+        if (log.isDebugEnabled()) {
+            StringBuilder msg = new StringBuilder("Store new token");
+            if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
+                msg.append(": " + accessToken);
+            }
+            msg.append(" for consumerKey: " + consumerKey + " for userstore: " + userStoreDomain);
+            log.debug(msg);
+        }
 
         userStoreDomain = getSanitizedUserStoreDomain(userStoreDomain);
         PreparedStatement insertTokenPrepStmt = null;
@@ -898,6 +908,11 @@ public class TokenMgtDAO {
     public AccessTokenDO retrieveAccessToken(String accessTokenIdentifier, boolean includeExpired)
             throws IdentityOAuth2Exception {
 
+        if (log.isDebugEnabled()) {
+            log.debug("Retrieve access token for tokenId: " + accessTokenIdentifier +
+                    " with flag includeExpired: " + includeExpired);
+        }
+
         AccessTokenDO dataDO = null;
         Connection connection = IdentityDatabaseUtil.getDBConnection();
         PreparedStatement prepStmt = null;
@@ -988,6 +1003,12 @@ public class TokenMgtDAO {
     public void setAccessTokenState(Connection connection, String tokenId, String tokenState,
                                     String tokenStateId, String userStoreDomain)
             throws IdentityOAuth2Exception {
+
+        if (log.isDebugEnabled()) {
+            log.debug("Update access token with tokenId: " + tokenId + " with tokenState: " + tokenState +
+                    " tokenStateId: " + tokenStateId + " for userstore: " + userStoreDomain);
+        }
+
         PreparedStatement prepStmt = null;
         try {
 
@@ -1534,6 +1555,17 @@ public class TokenMgtDAO {
                                             String consumerKey, String tokenStateId,
                                             AccessTokenDO accessTokenDO, String userStoreDomain)
             throws IdentityOAuth2Exception {
+
+        if (log.isDebugEnabled()) {
+            StringBuilder msg = new StringBuilder("Updating old access token with tokenId: " + oldAccessTokenId +
+                    " with tokenState: " + tokenState + " tokenStateId: " + tokenStateId + " for userstore: " +
+                    userStoreDomain + " and creating new access token");
+            if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
+                msg.append(": " + accessTokenDO.getAccessToken());
+            }
+
+            log.debug(msg);
+        }
 
         Connection connection = IdentityDatabaseUtil.getDBConnection();
         try {
