@@ -626,7 +626,7 @@ public class OAuth2Util {
         if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
             if (log.isDebugEnabled()) {
                 if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
-                    log.debug("Calculating partitioned sql for token: " + token);
+                    log.debug("Calculating partitioned sql for token (hashed): " + DigestUtils.sha256Hex(token));
                 } else {
                     // Avoid logging token since its a sensitive information.
                     log.debug("Calculating partitioned sql for token");

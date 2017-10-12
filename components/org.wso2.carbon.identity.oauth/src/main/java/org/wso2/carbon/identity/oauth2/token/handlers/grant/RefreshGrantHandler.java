@@ -19,6 +19,7 @@
 package org.wso2.carbon.identity.oauth2.token.handlers.grant;
 
 import org.apache.axiom.util.base64.Base64Utils;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.Charsets;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.logging.Log;
@@ -186,7 +187,8 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
 
             if (log.isDebugEnabled()) {
                 if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
-                    log.debug("New access token: " + accessToken + " & new refresh token: " + refreshToken);
+                    log.debug("New access token (hashed): " + DigestUtils.sha256Hex(accessToken) +
+                            " & new refresh token (hashed): " + DigestUtils.sha256Hex(refreshToken));
                 } else {
                     log.debug("Access token and refresh token generated.");
                 }
@@ -275,7 +277,8 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
 
             if (log.isDebugEnabled()) {
                 if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
-                    log.debug("Encoded access token: " + accessToken + " & encoded refresh token: " + refreshToken);
+                    log.debug("Encoded access token (hashed): " + DigestUtils.sha256Hex(accessToken) +
+                            " & encoded refresh token (hashed): " + DigestUtils.sha256Hex(refreshToken));
                 } else {
                     log.debug("Access token and refresh token encoded using Base64 encoding.");
                 }
@@ -302,7 +305,7 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
 
         if (log.isDebugEnabled()) {
             if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
-                log.debug("Previous access token: " + oldAccessToken.getAccessToken());
+                log.debug("Previous access token (hashed): " + DigestUtils.sha256Hex(oldAccessToken.getAccessToken()));
             }
         }
 
