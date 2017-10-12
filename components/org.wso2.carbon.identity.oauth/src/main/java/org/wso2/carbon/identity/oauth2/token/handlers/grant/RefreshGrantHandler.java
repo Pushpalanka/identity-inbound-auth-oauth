@@ -25,6 +25,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.common.error.OAuthError;
 import org.apache.oltu.oauth2.common.exception.OAuthSystemException;
+import org.wso2.carbon.identity.base.IdentityConstants;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.cache.OAuthCacheKey;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
@@ -182,6 +183,14 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
         try {
             accessToken = oauthIssuerImpl.accessToken(tokReqMsgCtx);
             refreshToken = oauthIssuerImpl.refreshToken(tokReqMsgCtx);
+
+            if (log.isDebugEnabled()) {
+                if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
+                    log.debug("New access token: " + accessToken + " & new refresh token: " + refreshToken);
+                } else {
+                    log.debug("Access token and refresh token generated.");
+                }
+            }
         } catch (OAuthSystemException e) {
             throw new IdentityOAuth2Exception("Error when generating the tokens.", e);
         }
@@ -264,6 +273,14 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
             String refreshTokenStrToEncode = refreshToken + ":" + userName;
             refreshToken = Base64Utils.encode(refreshTokenStrToEncode.getBytes(Charsets.UTF_8));
 
+            if (log.isDebugEnabled()) {
+                if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
+                    log.debug("Encoded access token: " + accessToken + " & encoded refresh token: " + refreshToken);
+                } else {
+                    log.debug("Access token and refresh token encoded using Base64 encoding.");
+                }
+            }
+
             // logic to store access token into different tables when multiple user stores are configured.
             if (OAuth2Util.checkAccessTokenPartitioningEnabled()) {
                 userStoreDomain = OAuth2Util.getUserStoreDomainFromUserId(userName);
@@ -282,6 +299,12 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
 
         RefreshTokenValidationDataDO oldAccessToken =
                 (RefreshTokenValidationDataDO) tokReqMsgCtx.getProperty(PREV_ACCESS_TOKEN);
+
+        if (log.isDebugEnabled()) {
+            if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
+                log.debug("Previous access token: " + oldAccessToken.getAccessToken());
+            }
+        }
 
         String authorizedUser = tokReqMsgCtx.getAuthorizedUser().toString();
 	    // set the previous access token state to "INACTIVE" and store new access token in single db connection

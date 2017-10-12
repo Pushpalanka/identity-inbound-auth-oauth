@@ -42,7 +42,7 @@ public class OAuth2UtilTest {
                 {"IDN_OAUTH2_ACCESS_TOKEN", "H2", "IDN_OAUTH2_ACCESS_TOKEN_A"},
                 {"IDN_OAUTH2_ACCESS_TOKEN", "AD", "IDN_OAUTH2_ACCESS_TOKEN_B"},
                 {"IDN_OAUTH2_ACCESS_TOKEN", "PRIMARY",  "IDN_OAUTH2_ACCESS_TOKEN"},
-                {"IDN_OAUTH2_ACCESS_TOKEN", "LDAP",  "IDN_OAUTH2_ACCESS_TOKEN"},
+                {"IDN_OAUTH2_ACCESS_TOKEN", "LDAP",  "IDN_OAUTH2_ACCESS_TOKEN_LDAP"},
                 {"IDN_OAUTH2_ACCESS_TOKEN_SCOPE", "H2", "IDN_OAUTH2_ACCESS_TOKEN_SCOPE_A"},
                 {null, "H2", null},
                 {"IDN_OAUTH2_ACCESS_TOKEN", null, "IDN_OAUTH2_ACCESS_TOKEN"}

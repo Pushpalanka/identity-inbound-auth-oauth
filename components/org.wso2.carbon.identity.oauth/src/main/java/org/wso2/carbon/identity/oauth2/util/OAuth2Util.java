@@ -537,18 +537,25 @@ public class OAuth2Util {
         return userStoreDomainMap;
     }
 
+    public static String getMappedUserStoreDomain(String userStoreDomain) throws IdentityOAuth2Exception {
+
+        String mappedUserStoreDomain = userStoreDomain;
+
+        Map<String, String> availableDomainMappings = OAuth2Util.getAvailableUserStoreDomainMappings();
+        if (userStoreDomain != null && availableDomainMappings.containsKey(userStoreDomain)) {
+            mappedUserStoreDomain = availableDomainMappings.get(userStoreDomain);
+        }
+
+        return mappedUserStoreDomain;
+    }
+
     public static String getPartitionedTableByUserStore(String tableName, String userStoreDomain)
             throws IdentityOAuth2Exception {
 
         if (StringUtils.isNotBlank(tableName) && StringUtils.isNotBlank(userStoreDomain) &&
                 !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
-
-            Map<String, String> availableDomainMappings = OAuth2Util.getAvailableUserStoreDomainMappings();
-
-            if (userStoreDomain != null && availableDomainMappings.containsKey(userStoreDomain)) {
-                String mappedUserStoreDomain = availableDomainMappings.get(userStoreDomain);
-                tableName = tableName + "_" + mappedUserStoreDomain;
-            }
+            String mappedUserStoreDomain = OAuth2Util.getMappedUserStoreDomain(userStoreDomain);
+            tableName = tableName + "_" + mappedUserStoreDomain;
         }
 
         return tableName;
@@ -639,12 +646,7 @@ public class OAuth2Util {
         if (userId != null) {
             String[] strArr = userId.split(UserCoreConstants.DOMAIN_SEPARATOR);
             if (strArr != null && strArr.length > 1) {
-                userStoreDomain = strArr[0];
-                Map<String, String> availableDomainMappings = OAuth2Util.getAvailableUserStoreDomainMappings();
-
-                if (userStoreDomain != null && availableDomainMappings.containsKey(userStoreDomain)) {
-                    userStoreDomain = availableDomainMappings.get(userStoreDomain);
-                }
+                userStoreDomain = getMappedUserStoreDomain(strArr[0]);
             }
         }
         return userStoreDomain;
