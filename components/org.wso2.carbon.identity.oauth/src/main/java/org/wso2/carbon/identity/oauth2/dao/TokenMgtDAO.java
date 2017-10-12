@@ -18,6 +18,7 @@
 
 package org.wso2.carbon.identity.oauth2.dao;
 
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -254,9 +255,9 @@ public class TokenMgtDAO {
         if (log.isDebugEnabled()) {
             StringBuilder msg = new StringBuilder("Store new token");
             if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
-                msg.append(": " + accessToken);
+                msg.append(" (hashed): ").append(DigestUtils.sha256Hex(accessTokenDO.getAccessToken()));
             }
-            msg.append(" for consumerKey: " + consumerKey + " for userstore: " + userStoreDomain);
+            msg.append(" for consumerKey: ").append(consumerKey).append(" for userstore: ").append(userStoreDomain);
             log.debug(msg);
         }
 
@@ -1561,7 +1562,7 @@ public class TokenMgtDAO {
                     " with tokenState: " + tokenState + " tokenStateId: " + tokenStateId + " for userstore: " +
                     userStoreDomain + " and creating new access token");
             if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
-                msg.append(": " + accessTokenDO.getAccessToken());
+                msg.append(" (hashed): ").append(DigestUtils.sha256Hex(accessTokenDO.getAccessToken()));
             }
 
             log.debug(msg);
