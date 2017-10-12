@@ -46,7 +46,17 @@ public class AuthorizationGrantCacheEntry extends CacheEntry {
 
     private String essentialClaims;
 
+    private String requestObjectClaims;
+
     private long authTime;
+
+    public String getRequestObjectClaims() {
+        return requestObjectClaims;
+    }
+
+    public void setRequestObjectClaims(String requestObjectClaims) {
+        this.requestObjectClaims = requestObjectClaims;
+    }
 
     public String getEssentialClaims() {
         return essentialClaims;

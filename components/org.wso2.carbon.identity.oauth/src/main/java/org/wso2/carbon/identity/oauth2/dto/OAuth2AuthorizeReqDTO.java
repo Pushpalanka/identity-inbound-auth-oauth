@@ -37,6 +37,15 @@ public class OAuth2AuthorizeReqDTO {
     private String tenantDomain;
     private long authTime;
     private String essentialClaims;
+    private String requestObjectClaims;
+
+    public String getRequestObjectClaims() {
+        return requestObjectClaims;
+    }
+
+    public void setRequestObjectClaims(String requestObjectClaims) {
+        this.requestObjectClaims = requestObjectClaims;
+    }
 
     public String getEssentialClaims() {
         return essentialClaims;

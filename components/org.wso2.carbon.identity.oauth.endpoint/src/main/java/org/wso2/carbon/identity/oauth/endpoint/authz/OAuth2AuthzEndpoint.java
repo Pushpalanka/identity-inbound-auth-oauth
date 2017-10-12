@@ -107,6 +107,7 @@ public class OAuth2AuthzEndpoint {
     private static final String RESPONSE_MODE_FORM_POST = "form_post";
     private static final String RESPONSE_MODE = "response_mode";
     private static final String AUTHENTICATION_RESULT_ERROR_PARAM_KEY = "AuthenticationError";
+    private static final String REQUEST = "request";
 
     @GET
     @Path("/")
@@ -692,6 +693,8 @@ public class OAuth2AuthzEndpoint {
         authorizationGrantCacheEntry.setPkceCodeChallengeMethod(pkceCodeChallengeMethod);
         authorizationGrantCacheEntry.setEssentialClaims(
                 sessionDataCacheEntry.getoAuth2Parameters().getEssentialClaims());
+        authorizationGrantCacheEntry.setRequestObjectClaims(sessionDataCacheEntry.getoAuth2Parameters().
+                getRequestObjectClaims());
         authorizationGrantCacheEntry.setAuthTime(sessionDataCacheEntry.getAuthTime());
         AuthorizationGrantCache.getInstance().addToCacheByCode(authorizationGrantCacheKey, authorizationGrantCacheEntry);
     }
@@ -826,6 +829,9 @@ public class OAuth2AuthzEndpoint {
         }
         if (StringUtils.isNotBlank(oauthRequest.getParam("claims"))) {
             params.setEssentialClaims(oauthRequest.getParam("claims"));
+        }
+        if (StringUtils.isNotBlank(oauthRequest.getParam(REQUEST))) {
+            params.setRequestObjectClaims(oauthRequest.getParam(REQUEST));
         }
         String prompt = oauthRequest.getParam(OAuthConstants.OAuth20Params.PROMPT);
         params.setPrompt(prompt);
@@ -1064,6 +1070,7 @@ public class OAuth2AuthzEndpoint {
         authzReqDTO.setTenantDomain(oauth2Params.getTenantDomain());
         authzReqDTO.setAuthTime(oauth2Params.getAuthTime());
         authzReqDTO.setEssentialClaims(oauth2Params.getEssentialClaims());
+        authzReqDTO.setRequestObjectClaims(oauth2Params.getRequestObjectClaims());
         return EndpointUtil.getOAuth2Service().authorize(authzReqDTO);
     }
 

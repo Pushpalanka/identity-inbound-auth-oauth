@@ -52,7 +52,11 @@ import java.util.Map;
  */
 public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
     private static final Log log = LogFactory.getLog(UserInfoJSONResponseBuilder.class);
-    private ArrayList<String> lstEssential = new ArrayList<>();
+    //to store the list of claims which have marked as essential with claims parameter
+    private ArrayList<String> essentialClaimsforClaimParam = new ArrayList<>();
+    //to store the list of claims which have marked as essential with request parameter
+    private ArrayList<String> essentialClaimsforRequestParam = new ArrayList<>();
+    private static final String USERINFO = "userinfo";
     private static final String UPDATED_AT = "updated_at";
     private static final String PHONE_NUMBER_VERIFIED = "phone_number_verified";
     private static final String EMAIL_VERIFIED = "email_verified";
@@ -160,8 +164,13 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
         if (!returnClaims.containsKey("sub") || StringUtils.isBlank((String) claims.get("sub"))) {
             returnClaims.put("sub", tokenResponse.getAuthorizedUser());
         }
-        if (lstEssential != null) {
-            for (String key : lstEssential) {
+        if (essentialClaimsforClaimParam != null) {
+            for (String key : essentialClaimsforClaimParam) {
+                returnClaims.put(key, claims.get(key));
+            }
+        }
+        if (essentialClaimsforRequestParam != null) {
+            for (String key : essentialClaimsforRequestParam) {
                 returnClaims.put(key, claims.get(key));
             }
         }
@@ -179,7 +188,11 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
         }
 
         if (StringUtils.isNotEmpty(cacheEntry.getEssentialClaims())) {
-            lstEssential = getEssentialClaims(cacheEntry.getEssentialClaims());
+            listEssentailClaims = getEssentialClaims(cacheEntry.getEssentialClaims());
+        }
+
+        if (StringUtils.isNotEmpty(cacheEntry.getRequestObjectClaims())) {
+            essentialClaimsforRequestParam = OAuth2Util.getRequestedClaims(cacheEntry.getRequestObjectClaims(), USERINFO);
         }
         return cacheEntry.getUserAttributes();
     }
