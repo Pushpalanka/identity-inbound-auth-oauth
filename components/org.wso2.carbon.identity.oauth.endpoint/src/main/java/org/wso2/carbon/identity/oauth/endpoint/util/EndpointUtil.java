@@ -19,6 +19,7 @@ package org.wso2.carbon.identity.oauth.endpoint.util;
 
 import org.apache.axiom.util.base64.Base64Utils;
 import org.apache.commons.io.Charsets;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -182,11 +183,14 @@ public class EndpointUtil {
     public static String[] extractCredentialsFromAuthzHeader(String authorizationHeader)
             throws OAuthClientException {
         String[] splitValues = authorizationHeader.trim().split(" ");
-        if(splitValues.length == 2) {
+        if (splitValues.length == 2) {
             byte[] decodedBytes = Base64Utils.decode(splitValues[1].trim());
             if (decodedBytes != null) {
                 String userNamePassword = new String(decodedBytes, Charsets.UTF_8);
-                return userNamePassword.split(":");
+                String[] credentials = userNamePassword.split(":");
+                if (ArrayUtils.isNotEmpty(credentials) && credentials.length == 2) {
+                    return credentials;
+                }
             }
         }
         String errMsg = "Error decoding authorization header. Space delimited \"<authMethod> <base64Hash>\" format violated.";

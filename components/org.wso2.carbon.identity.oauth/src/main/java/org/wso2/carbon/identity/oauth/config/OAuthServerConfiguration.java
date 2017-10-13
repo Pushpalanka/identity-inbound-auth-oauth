@@ -122,6 +122,7 @@ public class OAuthServerConfiguration {
     private TokenPersistenceProcessor persistenceProcessor = null;
     private Set<OAuthCallbackHandlerMetaData> callbackHandlerMetaData = new HashSet<>();
     private Map<String, String> supportedGrantTypeClassNames = new HashMap<>();
+    private Map<String, String> idTokenAllowedForGrantTypesMap = new HashMap<>();
     private Map<String, AuthorizationGrantHandler> supportedGrantTypes;
     private Map<String, String> supportedGrantTypeValidatorNames = new HashMap<>();
     private Map<String, Class<? extends OAuthValidator<HttpServletRequest>>> supportedGrantTypeValidators;
@@ -133,6 +134,7 @@ public class OAuthServerConfiguration {
     private Map<String, Properties> supportedClientAuthHandlerData = new HashMap<>();
     private List<ClientAuthenticationHandler> supportedClientAuthHandlers;
     private String saml2TokenCallbackHandlerName = null;
+    private String saml2BearerTokenUserType = "FEDERATED";
     private SAML2TokenCallbackHandler saml2TokenCallbackHandler = null;
     private Map<String, String> tokenValidatorClassNames = new HashMap();
     private boolean isAuthContextTokGenEnabled = false;
@@ -164,6 +166,9 @@ public class OAuthServerConfiguration {
     private boolean isJWTSignedWithSPKey = false;
     // property added to fix IDENTITY-4534 in backward compatible manner
     private boolean isImplicitErrorFragment = true;
+
+    // property added to fix IDENTITY-4112 in backward compatible manner
+    private boolean isRevokeResponseHeadersEnabled = true;
 
     private OAuthServerConfiguration() {
         buildOAuthServerConfiguration();
@@ -199,11 +204,18 @@ public class OAuthServerConfiguration {
         parseTokenValidators(oauthElem.getFirstChildWithName(
                 getQNameWithIdentityNS(ConfigElements.TOKEN_VALIDATORS)));
 
-        // Get the configured scope validator
+        // Get the configured jdbc scope validator
         OMElement scopeValidatorElem = oauthElem.getFirstChildWithName(
                 getQNameWithIdentityNS(ConfigElements.SCOPE_VALIDATOR));
+
+        //Get the configured scope validators
+        OMElement scopeValidatorsElem = oauthElem.getFirstChildWithName(
+                getQNameWithIdentityNS(ConfigElements.SCOPE_VALIDATORS));
+
         if (scopeValidatorElem != null) {
             parseScopeValidator(scopeValidatorElem);
+        } else if (scopeValidatorsElem != null) {
+            parseScopeValidator(scopeValidatorsElem);
         }
 
         // read default timeout periods
@@ -257,6 +269,8 @@ public class OAuthServerConfiguration {
 
         // parse identity OAuth 2.0 token generator
         parseOAuthTokenIssuerConfig(oauthElem);
+
+        parseRevokeResponseHeadersEnableConfig(oauthElem);
     }
 
     public Set<OAuthCallbackHandlerMetaData> getCallbackHandlerMetaData() {
@@ -636,6 +650,10 @@ public class OAuthServerConfiguration {
         return tokenValidatorClassNames;
     }
 
+    public Map<String, String> getIdTokenAllowedForGrantTypesMap() {
+        return idTokenAllowedForGrantTypesMap;
+    }
+
     public boolean isAccessTokenPartitioningEnabled() {
         return accessTokenPartitioningEnabled;
     }
@@ -821,6 +839,14 @@ public class OAuthServerConfiguration {
         return isImplicitErrorFragment;
     }
 
+    public boolean isRevokeResponseHeadersEnabled() {
+        return isRevokeResponseHeadersEnabled;
+    }
+
+    public String getSaml2BearerTokenUserType() {
+        return saml2BearerTokenUserType;
+    }
+
     private void parseOAuthCallbackHandlers(OMElement callbackHandlersElem) {
         if (callbackHandlersElem == null) {
             warnOnFaultyConfiguration("OAuthCallbackHandlers element is not available.");
@@ -869,10 +895,23 @@ public class OAuthServerConfiguration {
     }
 
     private void parseScopeValidator(OMElement scopeValidatorElem) {
+        String scopeValidatorClazz = null;
+        String scopesToSkipAttr = null;
 
-        String scopeValidatorClazz = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
-
-        String scopesToSkipAttr = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SKIP_SCOPE_ATTR));
+        if (ConfigElements.SCOPE_VALIDATORS.equals(scopeValidatorElem.getLocalName())) {
+            if (scopeValidatorElem.getFirstChildWithName
+                    (getQNameWithIdentityNS(ConfigElements.OIDC_SCOPE_VALIDATOR)) != null) {
+                scopeValidatorClazz =
+                        scopeValidatorElem.getFirstChildWithName(getQNameWithIdentityNS
+                                (ConfigElements.OIDC_SCOPE_VALIDATOR)).getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
+            } else {
+                scopeValidatorClazz = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
+                scopesToSkipAttr = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SKIP_SCOPE_ATTR));
+            }
+        } else {
+            scopeValidatorClazz = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SCOPE_CLASS_ATTR));
+            scopesToSkipAttr = scopeValidatorElem.getAttributeValue(new QName(ConfigElements.SKIP_SCOPE_ATTR));
+        }
         try {
             Class clazz = Thread.currentThread().getContextClassLoader().loadClass(scopeValidatorClazz);
             OAuth2ScopeValidator scopeValidator = (OAuth2ScopeValidator) clazz.newInstance();
@@ -1247,7 +1286,18 @@ public class OAuthServerConfiguration {
                     authzGrantHandlerImplClass = authzGrantHandlerClassNameElement.getText();
                 }
 
-                if (!StringUtils.isEmpty(grantTypeName) && !StringUtils.isEmpty(authzGrantHandlerImplClass)) {
+                OMElement idTokenAllowedElement = supportedGrantTypeElement
+                        .getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.ID_TOKEN_ALLOWED));
+                String idTokenAllowed = null;
+                if (idTokenAllowedElement != null) {
+                    idTokenAllowed = idTokenAllowedElement.getText();
+                }
+
+                if (StringUtils.isNotEmpty(grantTypeName) && StringUtils.isNotEmpty(idTokenAllowed)) {
+                    idTokenAllowedForGrantTypesMap.put(grantTypeName, idTokenAllowed);
+                }
+
+                if (StringUtils.isNotEmpty(grantTypeName) && StringUtils.isNotEmpty(authzGrantHandlerImplClass)) {
                     supportedGrantTypeClassNames.put(grantTypeName, authzGrantHandlerImplClass);
 
                     OMElement authzGrantValidatorClassNameElement = supportedGrantTypeElement.getFirstChildWithName(
@@ -1258,7 +1308,7 @@ public class OAuthServerConfiguration {
                         authzGrantValidatorImplClass = authzGrantValidatorClassNameElement.getText();
                     }
 
-                    if (!StringUtils.isEmpty(authzGrantValidatorImplClass)) {
+                    if (StringUtils.isNotEmpty(authzGrantValidatorImplClass)) {
                         supportedGrantTypeValidatorNames.put(grantTypeName, authzGrantValidatorImplClass);
                     }
                 }
@@ -1407,12 +1457,18 @@ public class OAuthServerConfiguration {
 
         OMElement saml2GrantElement =
                 oauthConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.SAML2_GRANT));
+        OMElement saml2BearerUserTypeElement = null;
         OMElement saml2TokenHandlerElement = null;
         if (saml2GrantElement != null) {
+            saml2BearerUserTypeElement = saml2GrantElement.getFirstChildWithName(getQNameWithIdentityNS
+                    (ConfigElements.SAML2_BEARER_USER_TYPE));
             saml2TokenHandlerElement = saml2GrantElement.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.SAML2_TOKEN_HANDLER));
         }
         if (saml2TokenHandlerElement != null && StringUtils.isNotBlank(saml2TokenHandlerElement.getText())) {
             saml2TokenCallbackHandlerName = saml2TokenHandlerElement.getText().trim();
+        }
+        if (saml2BearerUserTypeElement != null && StringUtils.isNotBlank(saml2BearerUserTypeElement.getText())) {
+            saml2BearerTokenUserType = saml2BearerUserTypeElement.getText().trim();
         }
     }
 
@@ -1480,6 +1536,18 @@ public class OAuthServerConfiguration {
 
         if (log.isDebugEnabled()) {
             log.debug("ImplicitErrorFragment was set to : " + isImplicitErrorFragment);
+        }
+    }
+
+    private void parseRevokeResponseHeadersEnableConfig(OMElement oauthConfigElem) {
+        OMElement enableRevokeResponseHeadersElem =
+                oauthConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.ENABLE_REVOKE_RESPONSE_HEADERS));
+        if (enableRevokeResponseHeadersElem != null) {
+            isRevokeResponseHeadersEnabled = Boolean.parseBoolean(enableRevokeResponseHeadersElem.getText());
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug("Enable revoke response headers : " + isRevokeResponseHeadersEnabled);
         }
     }
 
@@ -1640,6 +1708,8 @@ public class OAuthServerConfiguration {
         private static final String TOKEN_TYPE_ATTR = "type";
         private static final String TOKEN_CLASS_ATTR = "class";
         private static final String SCOPE_VALIDATOR = "OAuthScopeValidator";
+        private static final String SCOPE_VALIDATORS = "ScopeValidators";
+        private static final String OIDC_SCOPE_VALIDATOR = "OIDCScopeValidator";
         private static final String SCOPE_CLASS_ATTR = "class";
         private static final String SKIP_SCOPE_ATTR = "scopesToSkip";
         private static final String IMPLICIT_ERROR_FRAGMENT = "ImplicitErrorFragment";
@@ -1668,6 +1738,7 @@ public class OAuthServerConfiguration {
         private static final String GRANT_TYPE_HANDLER_IMPL_CLASS = "GrantTypeHandlerImplClass";
         private static final String GRANT_TYPE_VALIDATOR_IMPL_CLASS = "GrantTypeValidatorImplClass";
         private static final String RESPONSE_TYPE_VALIDATOR_IMPL_CLASS = "ResponseTypeValidatorImplClass";
+        private static final String ID_TOKEN_ALLOWED = "IdTokenAllowed";
         // Supported Client Authentication Methods
         private static final String CLIENT_AUTH_HANDLERS = "ClientAuthHandlers";
         private static final String CLIENT_AUTH_HANDLER_IMPL_CLASS = "ClientAuthHandler";
@@ -1684,7 +1755,10 @@ public class OAuthServerConfiguration {
         // SAML2 assertion profile configurations
         private static final String SAML2_GRANT = "SAML2Grant";
         private static final String SAML2_TOKEN_HANDLER = "SAML2TokenHandler";
+        private static final String SAML2_BEARER_USER_TYPE = "UserType";
 
+        // To enable revoke response headers
+        private static final String ENABLE_REVOKE_RESPONSE_HEADERS = "EnableRevokeResponseHeaders";
     }
 
 }

@@ -19,18 +19,21 @@
 package org.wso2.carbon.identity.oauth2.token.handlers.grant;
 
 import org.apache.axiom.util.base64.Base64Utils;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.Charsets;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.common.error.OAuthError;
 import org.apache.oltu.oauth2.common.exception.OAuthSystemException;
+import org.wso2.carbon.identity.base.IdentityConstants;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.cache.OAuthCacheKey;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.ResponseHeader;
-import org.wso2.carbon.identity.oauth2.dao.SQLQueries;
+import org.wso2.carbon.identity.oauth2.config.SpOAuth2ExpiryTimeConfiguration;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenReqDTO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenRespDTO;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
@@ -40,7 +43,9 @@ import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -55,7 +60,7 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
     public boolean validateGrant(OAuthTokenReqMessageContext tokReqMsgCtx)
             throws IdentityOAuth2Exception {
 
-        if(!super.validateGrant(tokReqMsgCtx)){
+        if (!super.validateGrant(tokReqMsgCtx)) {
             return false;
         }
 
@@ -67,19 +72,16 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
                 tokenReqDTO.getClientId(), refreshToken);
 
         if (validationDataDO.getAccessToken() == null) {
-            log.debug("Invalid Refresh Token provided for Client with " +
-                    "Client Id : " + tokenReqDTO.getClientId());
+            log.debug("Invalid Refresh Token provided for Client with Client Id : " + tokenReqDTO.getClientId());
             return false;
         }
 
         if (validationDataDO.getRefreshTokenState() != null &&
-                !OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE.equals(
-                        validationDataDO.getRefreshTokenState()) &&
-                !OAuthConstants.TokenStates.TOKEN_STATE_EXPIRED.equals(
-                        validationDataDO.getRefreshTokenState())) {
-            if(log.isDebugEnabled()) {
-                log.debug("Access Token is not in 'ACTIVE' or 'EXPIRED' state for Client with " +
-                        "Client Id : " + tokenReqDTO.getClientId());
+                !OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE.equals(validationDataDO.getRefreshTokenState()) &&
+                !OAuthConstants.TokenStates.TOKEN_STATE_EXPIRED.equals(validationDataDO.getRefreshTokenState())) {
+            if (log.isDebugEnabled()) {
+                log.debug("Access Token is not in 'ACTIVE' or 'EXPIRED' state for Client with Client Id : "
+                        + tokenReqDTO.getClientId());
             }
             return false;
         }
@@ -87,43 +89,61 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
         String userStoreDomain = null;
         if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
             try {
-                userStoreDomain = OAuth2Util.getUserStoreDomainFromUserId(validationDataDO.getAuthorizedUser().toString());
+                userStoreDomain = OAuth2Util.getUserStoreDomainFromUserId(validationDataDO.getAuthorizedUser()
+                        .toString());
             } catch (IdentityOAuth2Exception e) {
-                String errorMsg = "Error occurred while getting user store domain for User ID : " + validationDataDO.getAuthorizedUser();
-                log.error(errorMsg, e);
+                String errorMsg = "Error occurred while getting user store domain for User ID : "
+                        + validationDataDO.getAuthorizedUser();
                 throw new IdentityOAuth2Exception(errorMsg, e);
             }
         }
 
-        AccessTokenDO accessTokenDO = tokenMgtDAO.retrieveLatestAccessToken(tokenReqDTO.getClientId(),
-                validationDataDO.getAuthorizedUser(),
-                userStoreDomain, OAuth2Util.buildScopeString(validationDataDO.getScope()), true);
+        if (!OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE.equals(validationDataDO.getRefreshTokenState())) {
 
-        if (accessTokenDO == null) {
-            if (log.isDebugEnabled()) {
-                log.debug("Error while retrieving the latest refresh token");
+            // IDENTITY-5827 Here we have made a pragmatic assumption, that is, at the worst case
+            // there can be maximum 10 access-tokens issued within a period of 1 second.
+            // So we have set the limit for the database query row count to 10.
+            List<AccessTokenDO> accessTokenDOs = tokenMgtDAO.retrieveLatestAccessTokens(
+                    tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser(), userStoreDomain,
+                    OAuth2Util.buildScopeString(validationDataDO.getScope()), true, 10);
+            boolean isLatest = false;
+            if (accessTokenDOs == null || accessTokenDOs.isEmpty()) {
+                if (log.isDebugEnabled()) {
+                    log.debug("No refresh tokens to be retrieved. ClientId: " + tokenReqDTO.getClientId()
+                            + ", Authorized user: " + validationDataDO.getAuthorizedUser()
+                            + ", User store Domain: " + userStoreDomain
+                            + ", Scope: " + OAuth2Util.buildScopeString(validationDataDO.getScope()));
+                }
+                if (cacheEnabled) {
+                    clearCache(tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser().toString(),
+                               validationDataDO.getScope(), validationDataDO.getAccessToken());
+                }
+                return false;
+            } else {
+                for (AccessTokenDO token : accessTokenDOs) {
+                    if (refreshToken.equals(token.getRefreshToken())
+                            && OAuthConstants.TokenStates.TOKEN_STATE_ACTIVE.equals(token.getTokenState())
+                            || OAuthConstants.TokenStates.TOKEN_STATE_EXPIRED.equals(token.getTokenState())) {
+                        isLatest = true;
+                    }
+                }
             }
-            if (cacheEnabled) {
-                clearCache(tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser().toString(),
-                        validationDataDO.getScope(), validationDataDO.getAccessToken());
+            if (!isLatest) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Refresh token is not the latest. " + refreshToken);
+                }
+                if (cacheEnabled) {
+                    clearCache(tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser().toString(),
+                            validationDataDO.getScope(), validationDataDO.getAccessToken());
+                }
+                return false;
             }
-            return false;
-        } else if (!refreshToken.equals(accessTokenDO.getRefreshToken())) {
-            if (log.isDebugEnabled()) {
-                log.debug("Refresh token is not the latest.");
-            }
-            if (cacheEnabled) {
-                clearCache(tokenReqDTO.getClientId(), validationDataDO.getAuthorizedUser().toString(),
-                        validationDataDO.getScope(), validationDataDO.getAccessToken());
-            }
-            return false;
-        }
 
-        if (log.isDebugEnabled()) {
-            log.debug("Refresh token validation successful for " +
-                    "Client id : " + tokenReqDTO.getClientId() +
-                    ", Authorized User : " + validationDataDO.getAuthorizedUser() +
-                    ", Token Scope : " + OAuth2Util.buildScopeString(validationDataDO.getScope()));
+            if (log.isDebugEnabled()) {
+                log.debug("Refresh token validation successful for Client id : " + tokenReqDTO.getClientId() +
+                          ", Authorized User : " + validationDataDO.getAuthorizedUser() +
+                          ", Token Scope : " + OAuth2Util.buildScopeString(validationDataDO.getScope()));
+            }
         }
 
         tokReqMsgCtx.setAuthorizedUser(validationDataDO.getAuthorizedUser());
@@ -141,6 +161,14 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
         OAuth2AccessTokenRespDTO tokenRespDTO = new OAuth2AccessTokenRespDTO();
         OAuth2AccessTokenReqDTO oauth2AccessTokenReqDTO = tokReqMsgCtx.getOauth2AccessTokenReqDTO();
         String scope = OAuth2Util.buildScopeString(tokReqMsgCtx.getScope());
+        SpOAuth2ExpiryTimeConfiguration spTimeConfigObj = OAuth2Util
+                .getSpTokenExpiryTimeConfig(oauth2AccessTokenReqDTO.getClientId(), OAuth2Util
+                        .getTenantId(oauth2AccessTokenReqDTO.getTenantDomain()));
+        if (log.isDebugEnabled()) {
+            log.debug("Service Provider specific expiry time enabled for application : " + oauth2AccessTokenReqDTO.getClientId() + ". Application access token expiry time : " + spTimeConfigObj.getApplicationAccessTokenExpiryTime() +
+                    ", User access token expiry time : " + spTimeConfigObj.getUserAccessTokenExpiryTime() + ", Refresh token expiry time : " +
+                    spTimeConfigObj.getRefreshTokenExpiryTime());
+        }
 
         String tokenId;
         String accessToken;
@@ -156,6 +184,15 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
         try {
             accessToken = oauthIssuerImpl.accessToken(tokReqMsgCtx);
             refreshToken = oauthIssuerImpl.refreshToken(tokReqMsgCtx);
+
+            if (log.isDebugEnabled()) {
+                if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
+                    log.debug("New access token (hashed): " + DigestUtils.sha256Hex(accessToken) +
+                            " & new refresh token (hashed): " + DigestUtils.sha256Hex(refreshToken));
+                } else {
+                    log.debug("Access token and refresh token generated.");
+                }
+            }
         } catch (OAuthSystemException e) {
             throw new IdentityOAuth2Exception("Error when generating the tokens.", e);
         }
@@ -238,6 +275,15 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
             String refreshTokenStrToEncode = refreshToken + ":" + userName;
             refreshToken = Base64Utils.encode(refreshTokenStrToEncode.getBytes(Charsets.UTF_8));
 
+            if (log.isDebugEnabled()) {
+                if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
+                    log.debug("Encoded access token (hashed): " + DigestUtils.sha256Hex(accessToken) +
+                            " & encoded refresh token (hashed): " + DigestUtils.sha256Hex(refreshToken));
+                } else {
+                    log.debug("Access token and refresh token encoded using Base64 encoding.");
+                }
+            }
+
             // logic to store access token into different tables when multiple user stores are configured.
             if (OAuth2Util.checkAccessTokenPartitioningEnabled()) {
                 userStoreDomain = OAuth2Util.getUserStoreDomainFromUserId(userName);
@@ -256,6 +302,12 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
 
         RefreshTokenValidationDataDO oldAccessToken =
                 (RefreshTokenValidationDataDO) tokReqMsgCtx.getProperty(PREV_ACCESS_TOKEN);
+
+        if (log.isDebugEnabled()) {
+            if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
+                log.debug("Previous access token (hashed): " + DigestUtils.sha256Hex(oldAccessToken.getAccessToken()));
+            }
+        }
 
         String authorizedUser = tokReqMsgCtx.getAuthorizedUser().toString();
 	    // set the previous access token state to "INACTIVE" and store new access token in single db connection
@@ -332,6 +384,32 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
                 new ResponseHeader[respHeaders.size()]));
 
         return tokenRespDTO;
+    }
+
+    @Override
+    public boolean validateScope(OAuthTokenReqMessageContext tokReqMsgCtx)
+            throws IdentityOAuth2Exception {
+        /**
+         * The requested scope MUST NOT include any scope
+         * not originally granted by the resource owner, and if omitted is
+         * treated as equal to the scope originally granted by the
+         * resource owner
+         */
+        String[] requestedScopes = tokReqMsgCtx.getOauth2AccessTokenReqDTO().getScope();
+        String[] grantedScopes = tokReqMsgCtx.getScope();
+        if (ArrayUtils.isNotEmpty(requestedScopes)) {
+            if (ArrayUtils.isEmpty(grantedScopes)) {
+                return false;
+            }
+            List<String> grantedScopeList = Arrays.asList(grantedScopes);
+            for (String scope : requestedScopes) {
+                if (!grantedScopeList.contains(scope)) {
+                    return false;
+                }
+            }
+            tokReqMsgCtx.setScope(requestedScopes);
+        }
+        return super.validateScope(tokReqMsgCtx);
     }
 
     private OAuth2AccessTokenRespDTO handleError(String errorCode, String errorMsg,

@@ -66,6 +66,7 @@ public class OAuth2ServiceComponent {
     protected void activate(ComponentContext context) {
         int tenantId = PrivilegedCarbonContext.getThreadLocalCarbonContext().getTenantId();
         OAuth2Util.initiateOIDCScopes(tenantId);
+        OAuth2Util.initTokenExpiryTimesOfSps(tenantId);
         TenantCreationEventListener scopeTenantMgtListener = new TenantCreationEventListener();
         //Registering OAuth2Service as a OSGIService
         bundleContext = context.getBundleContext();

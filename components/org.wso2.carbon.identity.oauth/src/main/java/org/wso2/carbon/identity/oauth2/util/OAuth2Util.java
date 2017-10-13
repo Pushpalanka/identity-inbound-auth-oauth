@@ -32,7 +32,9 @@ import org.json.JSONObject;
 import org.wso2.carbon.base.CarbonBaseConstants;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.base.IdentityConstants;
+import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.util.IdentityIOStreamUtils;
+import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.IdentityOAuthAdminException;
 import org.wso2.carbon.identity.oauth.cache.AppInfoCache;
@@ -48,6 +50,7 @@ import org.wso2.carbon.identity.oauth.dao.OAuthConsumerDAO;
 import org.wso2.carbon.identity.oauth.internal.OAuthComponentServiceHolder;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.authz.OAuthAuthzReqMessageContext;
+import org.wso2.carbon.identity.oauth2.config.SpOAuth2ExpiryTimeConfiguration;
 import org.wso2.carbon.identity.oauth2.dao.TokenMgtDAO;
 import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
@@ -57,6 +60,7 @@ import org.wso2.carbon.registry.core.Registry;
 import org.wso2.carbon.registry.core.Resource;
 import org.wso2.carbon.registry.core.exceptions.RegistryException;
 import org.wso2.carbon.user.api.UserStoreException;
+import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.user.core.service.RealmService;
 import org.wso2.carbon.user.core.util.UserCoreUtil;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
@@ -101,6 +105,7 @@ public class OAuth2Util {
     public static final String OAUTH2_VALIDATION_MESSAGE_CONTEXT = "OAuth2TokenValidationMessageContext";
     private static String CLAIMS = "claims";
     private static String ESSENTIAL = "essential";
+    private static final String OIDC_SCOPE_VALIDATOR_CLASS = "org.wso2.carbon.identity.oauth2.validators.OIDCScopeValidator";
 
 
     private static final String ALGORITHM_NONE = "NONE";
@@ -164,6 +169,20 @@ public class OAuth2Util {
      * token was originally issued, as defined in JWT
      */
     public static final String IAT = "iat";
+    /***
+     * Constant for user access token expiry time.
+     */
+    public static final String USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS = "userAccessTokenExpireTime";
+
+    /***
+     * Constant for refresh token expiry time.
+     */
+    public static final String REFRESH_TOKEN_TIME_IN_MILLISECONDS = "refreshTokenExpireTime";
+
+    /***
+     * Constant for application access token expiry time.
+     */
+    public static final String APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS = "applicationAccessTokenExpireTime";
 
 
     private static Log log = LogFactory.getLog(OAuth2Util.class);
@@ -337,7 +356,7 @@ public class OAuth2Util {
 
         if (clientSecret == null) {
             if (log.isDebugEnabled()) {
-                log.debug("Provided Client ID : " + clientId + "is not valid.");
+                log.debug("Provided Client ID : " + clientId + " is not valid.");
             }
             return false;
         }
@@ -467,6 +486,26 @@ public class OAuth2Util {
         return null;
     }
 
+    /**
+     * Get Id Token allowed grant type list from identity.xml.
+     *
+     * @return Id Token allowed grant type list
+     */
+    public static List<String> getIdtokenAllowedGrantTypeList() {
+
+        List<String> idTokenAllowedGrantTypesList = new ArrayList();
+        Map<String, String> idTokenAllowedGrantTypesMap = OAuthServerConfiguration.getInstance().
+                getIdTokenAllowedForGrantTypesMap();
+        if (!idTokenAllowedGrantTypesMap.isEmpty()) {
+            for (Map.Entry<String, String> entry : idTokenAllowedGrantTypesMap.entrySet()) {
+                if (Boolean.parseBoolean(entry.getValue())) {
+                    idTokenAllowedGrantTypesList.add(entry.getKey());
+                }
+            }
+        }
+        return idTokenAllowedGrantTypesList;
+    }
+
     public static boolean checkAccessTokenPartitioningEnabled() {
         return OAuthServerConfiguration.getInstance().isAccessTokenPartitioningEnabled();
     }
@@ -497,21 +536,119 @@ public class OAuth2Util {
         return userStoreDomainMap;
     }
 
-    public static String getUserStoreDomainFromUserId(String userId)
+    public static String getMappedUserStoreDomain(String userStoreDomain) throws IdentityOAuth2Exception {
+
+        String mappedUserStoreDomain = userStoreDomain;
+
+        Map<String, String> availableDomainMappings = OAuth2Util.getAvailableUserStoreDomainMappings();
+        if (userStoreDomain != null && availableDomainMappings.containsKey(userStoreDomain)) {
+            mappedUserStoreDomain = availableDomainMappings.get(userStoreDomain);
+        }
+
+        return mappedUserStoreDomain;
+    }
+
+    public static String getPartitionedTableByUserStore(String tableName, String userStoreDomain)
             throws IdentityOAuth2Exception {
-        String userStore = null;
-        if (userId != null) {
-            String[] strArr = userId.split("/");
-            if (strArr != null && strArr.length > 1) {
-                userStore = strArr[0];
-                Map<String, String> availableDomainMappings = getAvailableUserStoreDomainMappings();
-                if (availableDomainMappings != null &&
-                        availableDomainMappings.containsKey(userStore)) {
-                    userStore = getAvailableUserStoreDomainMappings().get(userStore);
-                }
+
+        if (StringUtils.isNotBlank(tableName) && StringUtils.isNotBlank(userStoreDomain) &&
+                !IdentityUtil.getPrimaryDomainName().equalsIgnoreCase(userStoreDomain)) {
+            String mappedUserStoreDomain = OAuth2Util.getMappedUserStoreDomain(userStoreDomain);
+            tableName = tableName + "_" + mappedUserStoreDomain;
+        }
+
+        return tableName;
+    }
+
+    public static String getTokenPartitionedSqlByUserStore(String sql, String userStoreDomain)
+            throws IdentityOAuth2Exception {
+
+        String partitionedSql = sql;
+
+        if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
+
+            String partitionedAccessTokenTable = OAuth2Util.getPartitionedTableByUserStore(OAuthConstants.
+                    ACCESS_TOKEN_STORE_TABLE, userStoreDomain);
+
+            String accessTokenScopeTable = "IDN_OAUTH2_ACCESS_TOKEN_SCOPE";
+            String partitionedAccessTokenScopeTable = OAuth2Util.getPartitionedTableByUserStore(accessTokenScopeTable,
+                    userStoreDomain);
+
+            if (log.isDebugEnabled()) {
+                log.debug("PartitionedAccessTokenTable: " + partitionedAccessTokenTable +
+                        " & PartitionedAccessTokenScopeTable " + partitionedAccessTokenScopeTable +
+                        " for user store domain: " + userStoreDomain);
+            }
+
+            String wordBoundaryRegex = "\\b";
+            partitionedSql = sql.replaceAll(wordBoundaryRegex + OAuthConstants.ACCESS_TOKEN_STORE_TABLE
+                    + wordBoundaryRegex, partitionedAccessTokenTable);
+            partitionedSql = partitionedSql.replaceAll(wordBoundaryRegex + accessTokenScopeTable + wordBoundaryRegex,
+                    partitionedAccessTokenScopeTable);
+
+            if (log.isDebugEnabled()) {
+                log.debug("Original SQL: " + sql);
+                log.debug("Partitioned SQL: " + partitionedSql);
             }
         }
-        return userStore;
+
+        return partitionedSql;
+    }
+
+    public static String getTokenPartitionedSqlByUserId(String sql, String userId) throws IdentityOAuth2Exception {
+
+        String partitionedSql = sql;
+
+        if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
+            if (log.isDebugEnabled()) {
+                log.debug("Calculating partitioned sql for userId: " + userId);
+            }
+
+            String userStore = null;
+            if (userId != null) {
+                String[] strArr = userId.split(UserCoreConstants.DOMAIN_SEPARATOR);
+                if (strArr != null && strArr.length > 1) {
+                    userStore = strArr[0];
+                }
+            }
+
+            partitionedSql = OAuth2Util.getTokenPartitionedSqlByUserStore(sql, userStore);
+        }
+
+        return partitionedSql;
+    }
+
+    public static String getTokenPartitionedSqlByToken(String sql, String token) throws IdentityOAuth2Exception {
+
+        String partitionedSql = sql;
+
+        if (OAuth2Util.checkAccessTokenPartitioningEnabled() && OAuth2Util.checkUserNameAssertionEnabled()) {
+            if (log.isDebugEnabled()) {
+                if (IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
+                    log.debug("Calculating partitioned sql for token (hashed): " + DigestUtils.sha256Hex(token));
+                } else {
+                    // Avoid logging token since its a sensitive information.
+                    log.debug("Calculating partitioned sql for token");
+                }
+            }
+
+            String userId = OAuth2Util.getUserIdFromAccessToken(token); //i.e: 'foo.com/admin' or 'admin'
+            partitionedSql = OAuth2Util.getTokenPartitionedSqlByUserId(sql, userId);
+        }
+
+        return partitionedSql;
+    }
+
+    public static String getUserStoreDomainFromUserId(String userId)
+            throws IdentityOAuth2Exception {
+        String userStoreDomain = null;
+        if (userId != null) {
+            String[] strArr = userId.split(UserCoreConstants.DOMAIN_SEPARATOR);
+            if (strArr != null && strArr.length > 1) {
+                userStoreDomain = getMappedUserStoreDomain(strArr[0]);
+            }
+        }
+        return userStoreDomain;
     }
 
     public static String getUserStoreDomainFromAccessToken(String apiKey)
@@ -529,36 +666,34 @@ public class OAuth2Util {
         return userStoreDomain;
     }
 
+    @Deprecated
     public static String getAccessTokenStoreTableFromUserId(String userId)
             throws IdentityOAuth2Exception {
         String accessTokenStoreTable = OAuthConstants.ACCESS_TOKEN_STORE_TABLE;
         String userStore;
         if (userId != null) {
-            String[] strArr = userId.split("/");
+            String[] strArr = userId.split(UserCoreConstants.DOMAIN_SEPARATOR);
             if (strArr != null && strArr.length > 1) {
                 userStore = strArr[0];
-                Map<String, String> availableDomainMappings = getAvailableUserStoreDomainMappings();
-                if (availableDomainMappings != null &&
-                        availableDomainMappings.containsKey(userStore)) {
-                    accessTokenStoreTable = accessTokenStoreTable + "_" +
-                            availableDomainMappings.get(userStore);
-                }
+                accessTokenStoreTable = OAuth2Util.getPartitionedTableByUserStore(OAuthConstants.ACCESS_TOKEN_STORE_TABLE,
+                        userStore);
             }
         }
         return accessTokenStoreTable;
     }
 
+    @Deprecated
     public static String getAccessTokenStoreTableFromAccessToken(String apiKey)
             throws IdentityOAuth2Exception {
         String userId = getUserIdFromAccessToken(apiKey); //i.e: 'foo.com/admin' or 'admin'
-        return getAccessTokenStoreTableFromUserId(userId);
+        return OAuth2Util.getAccessTokenStoreTableFromUserId(userId);
     }
 
     public static String getUserIdFromAccessToken(String apiKey) {
         String userId = null;
         String decodedKey = new String(Base64.decodeBase64(apiKey.getBytes(Charsets.UTF_8)), Charsets.UTF_8);
         String[] tmpArr = decodedKey.split(":");
-        if (tmpArr != null) {
+        if (tmpArr != null && tmpArr.length > 1) {
             userId = tmpArr[1];
         }
         return userId;
@@ -1053,6 +1188,121 @@ public class OAuth2Util {
     public static String getClientIdForAccessToken(String accessTokenIdentifier) throws IdentityOAuth2Exception {
         AccessTokenDO accessTokenDO = getAccessTokenDOfromTokenIdentifier(accessTokenIdentifier);
         return accessTokenDO.getConsumerKey();
+    }
+
+    /***
+     * Read the configuration file at server start up.
+     * @param tenantId
+     */
+    public static void initTokenExpiryTimesOfSps(int tenantId) {
+        try{
+            Registry registry = OAuth2ServiceComponentHolder.getRegistryService().getConfigSystemRegistry(tenantId);
+            if (!registry.resourceExists(OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH)) {
+                Resource resource = registry.newResource();
+                registry.put(OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH, resource);
+            }
+        } catch (RegistryException e) {
+            log.error("Error while creating registry collection for :" + OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH, e);
+        }
+    }
+
+    /***
+     * Return the SP-token Expiry time configuration object when consumer key is given.
+     * @param consumerKey
+     * @param tenantId
+     * @return A SpOAuth2ExpiryTimeConfiguration Object
+     */
+    public static SpOAuth2ExpiryTimeConfiguration getSpTokenExpiryTimeConfig(String consumerKey, int tenantId) {
+        SpOAuth2ExpiryTimeConfiguration spTokenTimeObject = new SpOAuth2ExpiryTimeConfiguration();
+        try {
+            if (log.isDebugEnabled()) {
+                log.debug("SP wise token expiry time feature is applied for tenant id : " + tenantId
+                        + "and consumer key : " + consumerKey);
+            }
+            IdentityTenantUtil.initializeRegistry(tenantId, getTenantDomain(tenantId));
+            Registry registry = IdentityTenantUtil.getConfigRegistry(tenantId);
+            if (registry.resourceExists(OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH)) {
+                Resource resource = registry.get(OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH);
+                String jsonString = "{}";
+                Object consumerKeyObject = resource.getProperties().get(consumerKey);
+                if (consumerKeyObject instanceof List) {
+                    if (!((List) consumerKeyObject).isEmpty()) {
+                        jsonString = ((List) consumerKeyObject).get(0).toString();
+                    }
+                }
+                JSONObject spTimeObject = new JSONObject(jsonString);
+                if (spTimeObject.length() > 0) {
+                    if (spTimeObject.has(USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS) &&
+                            !spTimeObject.isNull(USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS)) {
+                        try {
+                            spTokenTimeObject.setUserAccessTokenExpiryTime(Long.parseLong(spTimeObject
+                                    .get(USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString()));
+                            if (log.isDebugEnabled()) {
+                                log.debug("The user access token expiry time :" + spTimeObject
+                                        .get(USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString() +
+                                        "  for application id : " + consumerKey);
+                            }
+                        } catch (NumberFormatException e) {
+                            String errorMsg = String.format("Invalid value provided as user access token expiry time for consumer key %s," +
+                                    " tenant id : %d. Given value: %s, Expected a long value", consumerKey, tenantId, spTimeObject
+                                    .get(USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString());
+                            log.error(errorMsg, e);
+                        }
+                    } else {
+                        spTokenTimeObject.setUserAccessTokenExpiryTime(OAuthServerConfiguration.getInstance()
+                                .getUserAccessTokenValidityPeriodInSeconds() * 1000);
+                    }
+
+                    if (spTimeObject.has(APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS) &&
+                            !spTimeObject.isNull(APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS)) {
+                        try {
+                            spTokenTimeObject.setApplicationAccessTokenExpiryTime(Long.parseLong(spTimeObject
+                                    .get(APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString()));
+                            if (log.isDebugEnabled()) {
+                                log.debug("The application access token expiry time :" + spTimeObject
+                                        .get(APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString() +
+                                        "  for application id : " + consumerKey);
+                            }
+                        } catch (NumberFormatException e) {
+                            String errorMsg = String.format("Invalid value provided as application access token expiry time for " +
+                                    "consumer key %s, tenant id : %d. Given value: %s, Expected a long value ", consumerKey, tenantId, spTimeObject
+                                    .get(APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS).toString());
+                            log.error(errorMsg, e);
+                        }
+                    } else {
+                        spTokenTimeObject.setApplicationAccessTokenExpiryTime(OAuthServerConfiguration.getInstance()
+                                .getApplicationAccessTokenValidityPeriodInSeconds() * 1000);
+                    }
+
+                    if (spTimeObject.has(REFRESH_TOKEN_TIME_IN_MILLISECONDS) &&
+                            !spTimeObject.isNull(REFRESH_TOKEN_TIME_IN_MILLISECONDS)) {
+                        try {
+                            spTokenTimeObject.setRefreshTokenExpiryTime(Long.parseLong(spTimeObject
+                                    .get(REFRESH_TOKEN_TIME_IN_MILLISECONDS).toString()));
+                            if (log.isDebugEnabled()) {
+                                log.debug("The refresh token expiry time :" + spTimeObject
+                                        .get(REFRESH_TOKEN_TIME_IN_MILLISECONDS).toString() +
+                                        " for application id : " + consumerKey);
+                            }
+
+                        } catch (NumberFormatException e) {
+                            String errorMsg = String.format("Invalid value provided as refresh token expiry time for consumer key %s," +
+                                    " tenant id : %d. Given value: %s, Expected a long value", consumerKey, tenantId, spTimeObject
+                                    .get(REFRESH_TOKEN_TIME_IN_MILLISECONDS).toString());
+                            log.error(errorMsg, e);
+                        }
+                    } else {
+                        spTokenTimeObject.setRefreshTokenExpiryTime(OAuthServerConfiguration.getInstance()
+                                .getRefreshTokenValidityPeriodInSeconds() * 1000);
+                    }
+                }
+            }
+        } catch (RegistryException e) {
+            log.error("Error while getting data from the registry.", e);
+        } catch (IdentityException e) {
+            log.error("Error while getting the tenant domain from tenant id : " + tenantId , e);
+        }
+        return spTokenTimeObject;
     }
 
     private static Map<String, String> loadScopeConfigFile() {

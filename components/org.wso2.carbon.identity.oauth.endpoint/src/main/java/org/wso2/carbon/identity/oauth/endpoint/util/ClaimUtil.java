@@ -24,6 +24,7 @@ import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.oltu.oauth2.common.error.OAuthError;
 import org.wso2.carbon.identity.application.authentication.framework.exception.FrameworkException;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkConstants;
 import org.wso2.carbon.identity.application.common.model.ClaimMapping;
@@ -37,7 +38,6 @@ import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.dao.OAuthAppDO;
 import org.wso2.carbon.identity.oauth.user.UserInfoEndpointException;
-import org.wso2.carbon.identity.oauth2.dao.TokenMgtDAO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2TokenValidationResponseDTO;
 import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
@@ -50,6 +50,7 @@ import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -84,13 +85,16 @@ public class ClaimUtil {
 
             UserStoreManager userstore = realm.getUserStoreManager();
 
-            TokenMgtDAO tokenMgtDAO = new TokenMgtDAO();
-            AccessTokenDO accessTokenDO = tokenMgtDAO.retrieveAccessToken(tokenResponse.getAuthorizationContextToken()
-                    .getTokenString(), false);
+            AccessTokenDO accessTokenDO = OAuth2Util.getAccessTokenDOfromTokenIdentifier(tokenResponse
+                    .getAuthorizationContextToken().getTokenString());
             ApplicationManagementService applicationMgtService = OAuth2ServiceComponentHolder.getApplicationMgtService();
-            String clientId = null;
+            String clientId;
             if (accessTokenDO != null) {
                 clientId = accessTokenDO.getConsumerKey();
+            } else {
+                // this means the token is not active so we can't proceed further
+                throw new UserInfoEndpointException(OAuthError.ResourceResponse.INVALID_TOKEN,
+                        "Invalid Access Token. Access token is not ACTIVE.");
             }
 
             OAuthAppDO oAuthAppDO = OAuth2Util.getAppInformationByClientId(clientId);
@@ -200,30 +204,33 @@ public class ClaimUtil {
      * @param locallyMappedUserRoles
      */
     public static String getServiceProviderMappedUserRoles(ServiceProvider serviceProvider,
-            List<String> locallyMappedUserRoles, String claimSeparator) throws FrameworkException {
+                                                           List<String> locallyMappedUserRoles,
+                                                           String claimSeparator) throws FrameworkException {
+
         if (CollectionUtils.isNotEmpty(locallyMappedUserRoles)) {
+            // SP to local role mappings
             RoleMapping[] localToSpRoleMapping = serviceProvider.getPermissionAndRoleConfig().getRoleMappings();
-            if (ArrayUtils.isEmpty(localToSpRoleMapping)) {
-                return null;
-            }
-
-            StringBuilder spMappedUserRoles = new StringBuilder();
-            for (RoleMapping roleMapping : localToSpRoleMapping) {
-                if (locallyMappedUserRoles.contains(roleMapping.getLocalRole().getLocalRoleName())) {
-                    spMappedUserRoles.append(roleMapping.getRemoteRole()).append(claimSeparator);
-                    locallyMappedUserRoles.remove(roleMapping.getLocalRole().getLocalRoleName());
+            List<String> spMappedRoles;
+            if (ArrayUtils.isNotEmpty(localToSpRoleMapping)) {
+                spMappedRoles = new ArrayList<>();
+                // Iterate through role mappings and add sp role mapped ones to a list
+                for (RoleMapping roleMapping : localToSpRoleMapping) {
+                    String localRoleName = roleMapping.getLocalRole().getLocalRoleName();
+                    if (locallyMappedUserRoles.contains(localRoleName)) {
+                        spMappedRoles.add(roleMapping.getRemoteRole());
+                        locallyMappedUserRoles.removeAll(Collections.singletonList(localRoleName));
+                    }
                 }
+                // Add the unmapped local roles
+                spMappedRoles.addAll(locallyMappedUserRoles);
+            } else {
+                // No SP Role mappings. Need to return local roles as it is
+                spMappedRoles = locallyMappedUserRoles;
             }
 
-            for (String remainingRole : locallyMappedUserRoles) {
-                spMappedUserRoles.append(remainingRole).append(claimSeparator);
-            }
-
-            return spMappedUserRoles.length() > 0 ?
-                    spMappedUserRoles.toString().substring(0, spMappedUserRoles.length() - 1) :
-                    null;
+            return StringUtils.join(spMappedRoles.toArray(), claimSeparator);
         }
-
+        // No local role for the user to be mapped to service provider role mappings.
         return null;
     }
 }
