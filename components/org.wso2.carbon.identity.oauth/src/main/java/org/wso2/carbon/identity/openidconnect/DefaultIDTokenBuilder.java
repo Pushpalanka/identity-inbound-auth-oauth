@@ -30,6 +30,7 @@ import com.nimbusds.jwt.SignedJWT;
 import org.apache.axiom.om.OMElement;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections.MapUtils;
 import org.apache.commons.io.Charsets;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
@@ -38,6 +39,7 @@ import org.apache.oltu.oauth2.common.message.types.GrantType;
 import org.wso2.carbon.base.MultitenantConstants;
 import org.wso2.carbon.core.util.KeyStoreManager;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
+import org.wso2.carbon.identity.application.common.model.ClaimMapping;
 import org.wso2.carbon.identity.application.common.model.FederatedAuthenticatorConfig;
 import org.wso2.carbon.identity.application.common.model.IdentityProvider;
 import org.wso2.carbon.identity.application.common.model.ServiceProvider;
@@ -78,14 +80,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.Certificate;
 import java.security.interfaces.RSAPrivateKey;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collections;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.xml.namespace.QName;
 
@@ -215,6 +210,8 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         long authTime = 0;
 
         LinkedHashSet acrValue = new LinkedHashSet();
+        JWTClaimsSet jwtClaimsSet = new JWTClaimsSet();
+
         // AuthorizationCode only available for authorization code grant type
         if (request.getProperty(AUTHORIZATION_CODE) != null) {
             AuthorizationGrantCacheEntry authorizationGrantCacheEntry = getAuthorizationGrantCacheEntry(request);
@@ -222,6 +219,21 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
                 nonceValue = authorizationGrantCacheEntry.getNonceValue();
                 acrValue = authorizationGrantCacheEntry.getAcrValue();
                 authTime = authorizationGrantCacheEntry.getAuthTime();
+                ArrayList<String> essentialClaimsforRequestParam = OAuth2Util.getRequestedClaims
+                        (authorizationGrantCacheEntry.getRequestObjectClaims(), OAuthConstants.ID_TOKEN);
+                if(CollectionUtils.isNotEmpty(essentialClaimsforRequestParam)){
+                    for (String essentialClaim : essentialClaimsforRequestParam) {
+                        if (log.isDebugEnabled()) {
+                            log.debug("Essential claims requested with the request parameter are " + essentialClaim);
+                        }
+                        if (authorizationGrantCacheEntry.getUserAttributes() != null) {
+                            Map<String, Object> userAttributesMap = getClaimsMap(authorizationGrantCacheEntry.getUserAttributes());
+                            if (userAttributesMap.get(essentialClaim) != null)
+                                jwtClaimsSet.setClaim(essentialClaim, userAttributesMap.get(essentialClaim));
+                        }
+                    }
+                }
+
             }
         }
         // Get access token issued time
@@ -269,7 +281,6 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
             audience.addAll(getOIDCEndpointUrl());
         }
 
-        JWTClaimsSet jwtClaimsSet = new JWTClaimsSet();
         jwtClaimsSet.setIssuer(issuer);
         jwtClaimsSet.setSubject(subject);
         jwtClaimsSet.setAudience(audience);
@@ -298,6 +309,23 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
             return new PlainJWT(jwtClaimsSet).serialize();
         }
         return signJWT(jwtClaimsSet, request);
+    }
+
+    /**
+     * Get claims map
+     *
+     * @param userAttributes User Attributes
+     * @return User attribute map
+     */
+    private Map<String, Object> getClaimsMap(Map<ClaimMapping, String> userAttributes) {
+
+        Map<String, Object> claims = new HashMap();
+        if (MapUtils.isNotEmpty(userAttributes)) {
+            for (Map.Entry<ClaimMapping, String> entry : userAttributes.entrySet()) {
+                claims.put(entry.getKey().getRemoteClaim().getClaimUri(), entry.getValue());
+            }
+        }
+        return claims;
     }
 
     @Override

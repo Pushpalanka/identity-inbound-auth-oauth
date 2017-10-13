@@ -100,7 +100,7 @@ public class OAuth2Util {
     public static final String ACCESS_TOKEN_DO = "AccessTokenDo";
     public static final String OAUTH2_VALIDATION_MESSAGE_CONTEXT = "OAuth2TokenValidationMessageContext";
     private static String CLAIMS = "claims";
-    private static String ESSENTIAL_TRUE = "{\"essential\":true}";
+    private static String ESSENTIAL = "essential";
 
 
     private static final String ALGORITHM_NONE = "NONE";
@@ -1197,32 +1197,45 @@ public class OAuth2Util {
     public static ArrayList<String> getRequestedClaims(String requestedClaims, String member) {
 
         JSONObject jsonObjectRequestedClaims = new JSONObject(requestedClaims);
-        ArrayList essentailClaimslist = new ArrayList();
-        String claimValue;
+        ArrayList essentialClaimsRequestParam = new ArrayList();
         if ((jsonObjectRequestedClaims != null) && jsonObjectRequestedClaims.toString().contains(CLAIMS)) {
             JSONObject jsonObjectClaims = jsonObjectRequestedClaims.getJSONObject(CLAIMS);
             if (jsonObjectClaims != null) {
                 Iterator<?> keys = jsonObjectClaims.keys();
+                String valueforEssential =null ;
                 while (keys.hasNext()) {
                     String key = (String) keys.next();
-                    if (key.equals(member)) {
-                        claimValue = jsonObjectClaims.get(key).toString();
-                        JSONObject jsonObjectClaimValues = new JSONObject(claimValue);
-                        if (jsonObjectClaimValues != null) {
-                            Iterator<?> claimKeyValues = jsonObjectClaimValues.keys();
-                            while (claimKeyValues.hasNext()) {
-                                String claimKeys = (String) claimKeyValues.next();
-                                if (ESSENTIAL_TRUE.equals(jsonObjectClaimValues.get(claimKeys))) {
-                                    essentailClaimslist.add(claimKeys);
+                    if (key.equals(member) && jsonObjectClaims.toString().contains(member)) {
+                        JSONObject jsonObjectMember = jsonObjectClaims.getJSONObject(member);
+                        if (jsonObjectMember != null) {
+                            Iterator<?> keysforMember = jsonObjectMember.keys();
+                            while (keysforMember.hasNext()) {
+                                String keyforMember = (String) keysforMember.next();
+                                if (jsonObjectMember.toString().contains(keyforMember) && !jsonObjectMember.isNull
+                                        (keyforMember)) {
+                                    JSONObject jsonObjectessentailClaim = jsonObjectMember.getJSONObject(keyforMember);
+                                    if (jsonObjectessentailClaim != null) {
+                                        Iterator<?> keysforEssentialClaim = jsonObjectessentailClaim.keys();
+                                        while (keysforEssentialClaim.hasNext()) {
+                                            String keyforEssential = (String) keysforEssentialClaim.next();
+                                            if(jsonObjectessentailClaim.get(keyforEssential)!=null) {
+                                                 valueforEssential = jsonObjectessentailClaim.get(keyforEssential).
+                                                        toString();
+                                            }
+                                            if (Boolean.parseBoolean(valueforEssential) && keyforEssential.
+                                                    equals(ESSENTIAL)) {
+                                                essentialClaimsRequestParam.add(keyforMember);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-
                     }
                 }
             }
         }
-        return essentailClaimslist;
+        return essentialClaimsRequestParam;
     }
 
 }

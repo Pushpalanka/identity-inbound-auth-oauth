@@ -188,7 +188,7 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
         }
 
         if (StringUtils.isNotEmpty(cacheEntry.getEssentialClaims())) {
-            listEssentailClaims = getEssentialClaims(cacheEntry.getEssentialClaims());
+            essentialClaimsforClaimParam = getEssentialClaims(cacheEntry.getEssentialClaims());
         }
 
         if (StringUtils.isNotEmpty(cacheEntry.getRequestObjectClaims())) {
