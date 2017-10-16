@@ -17,6 +17,7 @@
  */
 package org.wso2.carbon.identity.oauth.endpoint.user.impl;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -29,6 +30,7 @@ import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCache;
 import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCacheEntry;
 import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCacheKey;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
+import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth.endpoint.util.ClaimUtil;
 import org.wso2.carbon.identity.oauth.user.UserInfoClaimRetriever;
 import org.wso2.carbon.identity.oauth.user.UserInfoEndpointException;
@@ -36,6 +38,7 @@ import org.wso2.carbon.identity.oauth.user.UserInfoResponseBuilder;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2TokenValidationResponseDTO;
 import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.identity.openidconnect.RequestObjectProcessor;
 import org.wso2.carbon.registry.core.Resource;
 import org.wso2.carbon.registry.core.exceptions.RegistryException;
 import org.wso2.carbon.registry.core.service.RegistryService;
@@ -52,9 +55,9 @@ import java.util.Map;
  */
 public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
     private static final Log log = LogFactory.getLog(UserInfoJSONResponseBuilder.class);
-    //to store the list of claims which have marked as essential with claims parameter
+    //To store the list of claims which have marked as essential with claims parameter
     private ArrayList<String> essentialClaimsforClaimParam = new ArrayList<>();
-    //to store the list of claims which have marked as essential with request parameter
+    //To store the list of claims which have marked as essential with request parameter
     private ArrayList<String> essentialClaimsforRequestParam = new ArrayList<>();
     private static final String USERINFO = "userinfo";
     private static final String UPDATED_AT = "updated_at";
@@ -164,12 +167,12 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
         if (!returnClaims.containsKey("sub") || StringUtils.isBlank((String) claims.get("sub"))) {
             returnClaims.put("sub", tokenResponse.getAuthorizedUser());
         }
-        if (essentialClaimsforClaimParam != null) {
+        if (CollectionUtils.isNotEmpty(essentialClaimsforClaimParam)) {
             for (String key : essentialClaimsforClaimParam) {
                 returnClaims.put(key, claims.get(key));
             }
         }
-        if (essentialClaimsforRequestParam != null) {
+        if (CollectionUtils.isNotEmpty(essentialClaimsforRequestParam)) {
             for (String key : essentialClaimsforRequestParam) {
                 returnClaims.put(key, claims.get(key));
             }
@@ -191,21 +194,25 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
             essentialClaimsforClaimParam = getEssentialClaims(cacheEntry.getEssentialClaims());
         }
 
-        if (StringUtils.isNotEmpty(cacheEntry.getRequestObjectClaims())) {
-            essentialClaimsforRequestParam = OAuth2Util.getRequestedClaims(cacheEntry.getRequestObjectClaims(), USERINFO);
+        if (StringUtils.isNotEmpty(cacheEntry.getRequestParameterClaims())) {
+            RequestObjectProcessor requestObjectProcessor = OAuthServerConfiguration.getInstance().
+                    getRequestObjectProcessor();
+            if (StringUtils.isNotEmpty(cacheEntry.getRequestParameterClaims())) {
+                essentialClaimsforRequestParam = requestObjectProcessor.getEssentialClaimsofRequestParam(cacheEntry.
+                        getRequestParameterClaims(), USERINFO);
+            }
         }
         return cacheEntry.getUserAttributes();
     }
 
-    private ArrayList<String> getEssentialClaims(String essentialClaims) {
-        JSONObject jsonObjectClaims = new JSONObject(essentialClaims);
-        String key;
+    private ArrayList<String> getEssentialClaims(String essentialClaimsObject) {
+        JSONObject jsonObjectClaims = new JSONObject(essentialClaimsObject);
         ArrayList essentailClaimslist = new ArrayList();
         if ((jsonObjectClaims != null) && jsonObjectClaims.toString().contains("userinfo")) {
             JSONObject newJSON = jsonObjectClaims.getJSONObject("userinfo");
             Iterator<?> keys = newJSON.keys();
             while (keys.hasNext()) {
-                key = (String) keys.next();
+                String key = (String) keys.next();
                 String value = null;
                 if (newJSON != null) {
                     value = newJSON.get(key).toString();

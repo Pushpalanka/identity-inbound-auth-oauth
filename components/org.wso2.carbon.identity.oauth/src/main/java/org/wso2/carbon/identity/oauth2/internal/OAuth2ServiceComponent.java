@@ -30,11 +30,13 @@ import org.wso2.carbon.identity.base.IdentityRuntimeException;
 import org.wso2.carbon.identity.core.util.IdentityCoreInitializedEvent;
 import org.wso2.carbon.identity.core.util.IdentityDatabaseUtil;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
+import org.wso2.carbon.identity.oauth2.DefaultRequestObjectValidator;
 import org.wso2.carbon.identity.oauth2.OAuth2Service;
 import org.wso2.carbon.identity.oauth2.OAuth2TokenValidationService;
 import org.wso2.carbon.identity.oauth2.dao.SQLQueries;
 import org.wso2.carbon.identity.oauth2.listener.TenantCreationEventListener;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.identity.openidconnect.RequestObjectValidator;
 import org.wso2.carbon.identity.user.store.configuration.listener.UserStoreConfigListener;
 import org.wso2.carbon.registry.core.service.RegistryService;
 import org.wso2.carbon.stratos.common.listeners.TenantMgtListener;
@@ -71,6 +73,10 @@ public class OAuth2ServiceComponent {
         //Registering OAuth2Service as a OSGIService
         bundleContext = context.getBundleContext();
         bundleContext.registerService(OAuth2Service.class.getName(), new OAuth2Service(), null);
+        //Registering DefaultRequestObjectValidator as a OSGIService
+        bundleContext = context.getBundleContext();
+        bundleContext.registerService(DefaultRequestObjectValidator.class.getName(), new DefaultRequestObjectValidator()
+                , null);
         //Registering TenantCreationEventListener
         ServiceRegistration scopeTenantMgtListenerSR = bundleContext.registerService(
                 TenantMgtListener.class.getName(), scopeTenantMgtListener, null);

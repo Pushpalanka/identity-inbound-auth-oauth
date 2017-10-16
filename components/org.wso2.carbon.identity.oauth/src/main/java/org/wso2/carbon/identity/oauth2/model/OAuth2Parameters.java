@@ -47,14 +47,23 @@ public class OAuth2Parameters implements Serializable {
     private long authTime;
     private String responseMode;
     private String essentialClaims;
-    private String requestObjectClaims;
+    private String requestParameterClaims;
+    private String requestUriParameterClaims;
 
-    public String getRequestObjectClaims() {
-        return requestObjectClaims;
+    public String getRequestUriParameterClaims() {
+        return requestUriParameterClaims;
     }
 
-    public void setRequestObjectClaims(String requestObjectClaims) {
-        this.requestObjectClaims = requestObjectClaims;
+    public void setRequestUriParameterClaims(String requestUriParameterClaims) {
+        this.requestUriParameterClaims = requestUriParameterClaims;
+    }
+
+    public String getRequestParameterClaims() {
+        return requestParameterClaims;
+    }
+
+    public void setRequestParameterClaims(String requestObjectClaims) {
+        this.requestParameterClaims = requestObjectClaims;
     }
 
     public String getEssentialClaims() {

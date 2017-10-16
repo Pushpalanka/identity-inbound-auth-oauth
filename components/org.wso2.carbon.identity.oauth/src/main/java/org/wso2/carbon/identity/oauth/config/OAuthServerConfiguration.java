@@ -54,6 +54,8 @@ import org.wso2.carbon.identity.oauth2.token.handlers.grant.saml.SAML2TokenCallb
 import org.wso2.carbon.identity.oauth2.validators.OAuth2ScopeValidator;
 import org.wso2.carbon.identity.openidconnect.CustomClaimsCallbackHandler;
 import org.wso2.carbon.identity.openidconnect.IDTokenBuilder;
+import org.wso2.carbon.identity.openidconnect.RequestObjectProcessor;
+import org.wso2.carbon.identity.openidconnect.RequestObjectValidator;
 import org.wso2.carbon.utils.CarbonUtils;
 
 import java.util.ArrayList;
@@ -149,8 +151,10 @@ public class OAuthServerConfiguration {
 
     // OpenID Connect configurations
     private String openIDConnectIDTokenBuilderClassName = "org.wso2.carbon.identity.openidconnect.DefaultIDTokenBuilder";
+    private String defaultRequestObjectProcessorClassName = "org.wso2.carbon.identity.oauth2.DefaultRequestObjectProcessor";
     private String openIDConnectIDTokenCustomClaimsHanlderClassName = "org.wso2.carbon.identity.openidconnect.SAMLAssertionClaimsCallback";
     private IDTokenBuilder openIDConnectIDTokenBuilder = null;
+    private RequestObjectProcessor defaultRequestObjectProcessor = null;
     private CustomClaimsCallbackHandler openidConnectIDTokenCustomClaimsCallbackHandler = null;
     private String openIDConnectIDTokenIssuerIdentifier = null;
     private String openIDConnectIDTokenSubClaim = "http://wso2.org/claims/fullname";
@@ -755,6 +759,33 @@ public class OAuthServerConfiguration {
             }
         }
         return openIDConnectIDTokenBuilder;
+    }
+
+    /**
+     * Return an instance of the IDToken builder
+     *
+     * @return instance of the IDToken builder
+     */
+    public RequestObjectProcessor getRequestObjectProcessor() {
+        if (defaultRequestObjectProcessor == null) {
+            synchronized (RequestObjectProcessor.class) {
+                if (defaultRequestObjectProcessor == null) {
+                    try {
+                        Class clazz =
+                                Thread.currentThread().getContextClassLoader()
+                                        .loadClass(defaultRequestObjectProcessorClassName);
+                        defaultRequestObjectProcessor = (RequestObjectProcessor) clazz.newInstance();
+                    } catch (ClassNotFoundException e) {
+                        log.error("Error while instantiating the RequestObjectProcessor ", e);
+                    } catch (InstantiationException e) {
+                        log.error("Error while instantiating the RequestObjectProcessor ", e);
+                    } catch (IllegalAccessException e) {
+                        log.error("Error while instantiating the RequestObjectProcessor ", e);
+                    }
+                }
+            }
+        }
+        return defaultRequestObjectProcessor;
     }
 
     /**
@@ -1562,6 +1593,12 @@ public class OAuthServerConfiguration {
                         openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.OPENID_CONNECT_IDTOKEN_BUILDER))
                                 .getText().trim();
             }
+            if (openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.
+                    REQUEST_OBJECT_PROCESSOR)) != null) {
+                defaultRequestObjectProcessorClassName =
+                        openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.
+                                REQUEST_OBJECT_PROCESSOR)).getText().trim();
+            }
 
             if (openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.SIGNATURE_ALGORITHM)) != null) {
                 idTokenSignatureAlgorithm =
@@ -1683,6 +1720,7 @@ public class OAuthServerConfiguration {
         // OpenIDConnect configurations
         public static final String OPENID_CONNECT = "OpenIDConnect";
         public static final String OPENID_CONNECT_IDTOKEN_BUILDER = "IDTokenBuilder";
+        public static final String REQUEST_OBJECT_PROCESSOR = "RequestObjectProcessor";
         public static final String OPENID_CONNECT_IDTOKEN_SUB_CLAIM = "IDTokenSubjectClaim";
         public static final String OPENID_CONNECT_IDTOKEN_ISSUER_ID = "IDTokenIssuerID";
         public static final String OPENID_CONNECT_IDTOKEN_EXPIRATION = "IDTokenExpiration";

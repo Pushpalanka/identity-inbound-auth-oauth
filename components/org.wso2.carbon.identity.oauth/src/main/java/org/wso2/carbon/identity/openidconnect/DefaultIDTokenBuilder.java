@@ -81,7 +81,15 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.Certificate;
 import java.security.interfaces.RSAPrivateKey;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.xml.namespace.QName;
 
@@ -235,10 +243,15 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
                 nonceValue = authorizationGrantCacheEntry.getNonceValue();
                 acrValue = authorizationGrantCacheEntry.getAcrValue();
                 authTime = authorizationGrantCacheEntry.getAuthTime();
-                ArrayList<String> essentialClaimsforRequestParam = OAuth2Util.getRequestedClaims
-                        (authorizationGrantCacheEntry.getRequestObjectClaims(), OAuthConstants.ID_TOKEN);
-                if(CollectionUtils.isNotEmpty(essentialClaimsforRequestParam)){
-                    for (String essentialClaim : essentialClaimsforRequestParam) {
+                RequestObjectProcessor requestObjectProcessor = OAuthServerConfiguration.getInstance().
+                        getRequestObjectProcessor();
+                ArrayList<String> essentialClaimsfromRequestParam = null;
+                if (StringUtils.isNotEmpty(authorizationGrantCacheEntry.getRequestParameterClaims())) {
+                    essentialClaimsfromRequestParam = requestObjectProcessor.getEssentialClaimsofRequestParam
+                            (authorizationGrantCacheEntry.getRequestParameterClaims(), OAuthConstants.ID_TOKEN);
+                }
+                if(CollectionUtils.isNotEmpty(essentialClaimsfromRequestParam)){
+                    for (String essentialClaim : essentialClaimsfromRequestParam) {
                         if (log.isDebugEnabled()) {
                             log.debug("Essential claims requested with the request parameter are " + essentialClaim);
                         }

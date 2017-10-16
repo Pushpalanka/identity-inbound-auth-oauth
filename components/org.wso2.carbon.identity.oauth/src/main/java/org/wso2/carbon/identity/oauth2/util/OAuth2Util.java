@@ -19,6 +19,8 @@
 package org.wso2.carbon.identity.oauth2.util;
 
 import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jwt.SignedJWT;
+import net.minidev.json.parser.JSONParser;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
 import org.apache.commons.codec.binary.Base64;
@@ -28,6 +30,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.common.message.types.ResponseType;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.wso2.carbon.base.CarbonBaseConstants;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
@@ -66,17 +69,16 @@ import org.wso2.carbon.user.core.util.UserCoreUtil;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.security.*;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.sql.Timestamp;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
@@ -103,10 +105,7 @@ public class OAuth2Util {
     public static final String JWT_ACCESS_TOKEN = "JWT_ACCESS_TOKEN";
     public static final String ACCESS_TOKEN_DO = "AccessTokenDo";
     public static final String OAUTH2_VALIDATION_MESSAGE_CONTEXT = "OAuth2TokenValidationMessageContext";
-    private static String CLAIMS = "claims";
-    private static String ESSENTIAL = "essential";
     private static final String OIDC_SCOPE_VALIDATOR_CLASS = "org.wso2.carbon.identity.oauth2.validators.OIDCScopeValidator";
-
 
     private static final String ALGORITHM_NONE = "NONE";
     /*
@@ -169,17 +168,18 @@ public class OAuth2Util {
      * token was originally issued, as defined in JWT
      */
     public static final String IAT = "iat";
-    /***
+
+    /**
      * Constant for user access token expiry time.
      */
     public static final String USER_ACCESS_TOKEN_TIME_IN_MILLISECONDS = "userAccessTokenExpireTime";
 
-    /***
+    /**
      * Constant for refresh token expiry time.
      */
     public static final String REFRESH_TOKEN_TIME_IN_MILLISECONDS = "refreshTokenExpireTime";
 
-    /***
+    /**
      * Constant for application access token expiry time.
      */
     public static final String APPLICATION_ACCESS_TOKEN_TIME_IN_MILLISECONDS = "applicationAccessTokenExpireTime";
@@ -1190,12 +1190,13 @@ public class OAuth2Util {
         return accessTokenDO.getConsumerKey();
     }
 
-    /***
+    /**
      * Read the configuration file at server start up.
+     *
      * @param tenantId
      */
     public static void initTokenExpiryTimesOfSps(int tenantId) {
-        try{
+        try {
             Registry registry = OAuth2ServiceComponentHolder.getRegistryService().getConfigSystemRegistry(tenantId);
             if (!registry.resourceExists(OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH)) {
                 Resource resource = registry.newResource();
@@ -1206,8 +1207,9 @@ public class OAuth2Util {
         }
     }
 
-    /***
+    /**
      * Return the SP-token Expiry time configuration object when consumer key is given.
+     *
      * @param consumerKey
      * @param tenantId
      * @return A SpOAuth2ExpiryTimeConfiguration Object
@@ -1300,7 +1302,7 @@ public class OAuth2Util {
         } catch (RegistryException e) {
             log.error("Error while getting data from the registry.", e);
         } catch (IdentityException e) {
-            log.error("Error while getting the tenant domain from tenant id : " + tenantId , e);
+            log.error("Error while getting the tenant domain from tenant id : " + tenantId, e);
         }
         return spTokenTimeObject;
     }
@@ -1438,54 +1440,19 @@ public class OAuth2Util {
     }
 
     /**
-     * This method returns list of essential claims according to the request object content.
+     * Validates the json provided.
      *
-     * @param requestedClaims requested claims
-     * @param member member can be userinfo endpoint or the id token
-     * @return requested claims
+     * @param redirectURL
+     * @return true if a valid json
      */
-    public static ArrayList<String> getRequestedClaims(String requestedClaims, String member) {
+    public static boolean isJSON(String redirectURL) {
 
-        JSONObject jsonObjectRequestedClaims = new JSONObject(requestedClaims);
-        ArrayList essentialClaimsRequestParam = new ArrayList();
-        if ((jsonObjectRequestedClaims != null) && jsonObjectRequestedClaims.toString().contains(CLAIMS)) {
-            JSONObject jsonObjectClaims = jsonObjectRequestedClaims.getJSONObject(CLAIMS);
-            if (jsonObjectClaims != null) {
-                Iterator<?> keys = jsonObjectClaims.keys();
-                String valueforEssential =null ;
-                while (keys.hasNext()) {
-                    String key = (String) keys.next();
-                    if (key.equals(member) && jsonObjectClaims.toString().contains(member)) {
-                        JSONObject jsonObjectMember = jsonObjectClaims.getJSONObject(member);
-                        if (jsonObjectMember != null) {
-                            Iterator<?> keysforMember = jsonObjectMember.keys();
-                            while (keysforMember.hasNext()) {
-                                String keyforMember = (String) keysforMember.next();
-                                if (jsonObjectMember.toString().contains(keyforMember) && !jsonObjectMember.isNull
-                                        (keyforMember)) {
-                                    JSONObject jsonObjectessentailClaim = jsonObjectMember.getJSONObject(keyforMember);
-                                    if (jsonObjectessentailClaim != null) {
-                                        Iterator<?> keysforEssentialClaim = jsonObjectessentailClaim.keys();
-                                        while (keysforEssentialClaim.hasNext()) {
-                                            String keyforEssential = (String) keysforEssentialClaim.next();
-                                            if(jsonObjectessentailClaim.get(keyforEssential)!=null) {
-                                                 valueforEssential = jsonObjectessentailClaim.get(keyforEssential).
-                                                        toString();
-                                            }
-                                            if (Boolean.parseBoolean(valueforEssential) && keyforEssential.
-                                                    equals(ESSENTIAL)) {
-                                                essentialClaimsRequestParam.add(keyforMember);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        try {
+            new JSONObject(redirectURL);
+        } catch (JSONException ex) {
+            return false;
         }
-        return essentialClaimsRequestParam;
+        return true;
     }
 
 }

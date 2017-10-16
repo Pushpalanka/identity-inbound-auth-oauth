@@ -44,11 +44,13 @@ import org.wso2.carbon.identity.oauth.cache.SessionDataCacheKey;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth.common.exception.OAuthClientException;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
+import org.wso2.carbon.identity.oauth2.DefaultRequestObjectValidator;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.OAuth2Service;
 import org.wso2.carbon.identity.oauth2.OAuth2TokenValidationService;
 import org.wso2.carbon.identity.oauth2.model.OAuth2Parameters;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.identity.openidconnect.RequestObjectValidator;
 import org.wso2.carbon.identity.webfinger.DefaultWebFingerProcessor;
 import org.wso2.carbon.identity.webfinger.WebFingerProcessor;
 
@@ -105,6 +107,14 @@ public class EndpointUtil {
     public static OAuth2Service getOAuth2Service() {
         return (OAuth2Service) PrivilegedCarbonContext.getThreadLocalCarbonContext()
                 .getOSGiService(OAuth2Service.class);
+    }
+
+    /**
+     * Returns the {@code RequestObjectValidator} instance
+     */
+    public static RequestObjectValidator getRequestObjectValidator() {
+        return (RequestObjectValidator) PrivilegedCarbonContext.getThreadLocalCarbonContext()
+                .getOSGiService(RequestObjectValidator.class);
     }
 
     /**

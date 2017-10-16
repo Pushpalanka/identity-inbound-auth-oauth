@@ -19,7 +19,6 @@
 package org.wso2.carbon.identity.oauth.common;
 
 public final class OAuthConstants {
-
     //OAuth2 request headers.
     public static final String HTTP_REQ_HEADER_AUTHZ = "Authorization";
 
@@ -109,6 +108,11 @@ public final class OAuthConstants {
     //Constants used for multiple scopes
     public static final String OIDC_SCOPE_CONFIG_PATH = "oidc-scope-config.xml";
     public static final String SCOPE_RESOURCE_PATH = "/oidc";
+
+    //Constants for reading EndpointConfig.properties
+    public static final String CONFIG_RELATIVE_PATH = "./repository/conf/identity/EndpointConfig.properties";
+    public static final String CLIENT_TRUST_STORE_PASSWORD = "Carbon.Security.TrustStore.Password";
+    public static final String CLIENT_TRUST_STORE = "client.trustStore";
 
     public static final String TENANT_NAME_FROM_CONTEXT = "TenantNameFromContext";
 

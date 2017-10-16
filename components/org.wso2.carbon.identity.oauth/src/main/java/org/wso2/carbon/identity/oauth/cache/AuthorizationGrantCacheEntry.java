@@ -46,16 +46,25 @@ public class AuthorizationGrantCacheEntry extends CacheEntry {
 
     private String essentialClaims;
 
-    private String requestObjectClaims;
+    private String requestParameterClaims;
+    private String requestUriParameterClaims;
 
     private long authTime;
 
-    public String getRequestObjectClaims() {
-        return requestObjectClaims;
+    public String getRequestParameterClaims() {
+        return requestParameterClaims;
     }
 
-    public void setRequestObjectClaims(String requestObjectClaims) {
-        this.requestObjectClaims = requestObjectClaims;
+    public void setRequestUriParameterClaims(String requestUriParameterClaims) {
+        this.requestUriParameterClaims = requestUriParameterClaims;
+    }
+
+    public String getRequestUriParameterClaims() {
+        return requestUriParameterClaims;
+    }
+
+    public void setRequestParameterClaims(String requestParameterClaims) {
+        this.requestParameterClaims = requestParameterClaims;
     }
 
     public String getEssentialClaims() {

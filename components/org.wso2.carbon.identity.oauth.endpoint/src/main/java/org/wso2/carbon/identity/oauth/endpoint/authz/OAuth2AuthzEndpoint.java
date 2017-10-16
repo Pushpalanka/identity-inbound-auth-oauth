@@ -108,6 +108,7 @@ public class OAuth2AuthzEndpoint {
     private static final String RESPONSE_MODE = "response_mode";
     private static final String AUTHENTICATION_RESULT_ERROR_PARAM_KEY = "AuthenticationError";
     private static final String REQUEST = "request";
+    private static final String REQUEST_URI = "request_uri";
 
     @GET
     @Path("/")
@@ -693,8 +694,14 @@ public class OAuth2AuthzEndpoint {
         authorizationGrantCacheEntry.setPkceCodeChallengeMethod(pkceCodeChallengeMethod);
         authorizationGrantCacheEntry.setEssentialClaims(
                 sessionDataCacheEntry.getoAuth2Parameters().getEssentialClaims());
-        authorizationGrantCacheEntry.setRequestObjectClaims(sessionDataCacheEntry.getoAuth2Parameters().
-                getRequestObjectClaims());
+        if (StringUtils.isNotEmpty(sessionDataCacheEntry.getoAuth2Parameters().getRequestParameterClaims())) {
+            authorizationGrantCacheEntry.setRequestParameterClaims(sessionDataCacheEntry.getoAuth2Parameters().
+                    getRequestParameterClaims());
+        }
+        if (StringUtils.isNotEmpty(sessionDataCacheEntry.getoAuth2Parameters().getRequestUriParameterClaims())) {
+            authorizationGrantCacheEntry.setRequestUriParameterClaims(sessionDataCacheEntry.getoAuth2Parameters().
+                    getRequestUriParameterClaims());
+        }
         authorizationGrantCacheEntry.setAuthTime(sessionDataCacheEntry.getAuthTime());
         AuthorizationGrantCache.getInstance().addToCacheByCode(authorizationGrantCacheKey, authorizationGrantCacheEntry);
     }
@@ -830,8 +837,29 @@ public class OAuth2AuthzEndpoint {
         if (StringUtils.isNotBlank(oauthRequest.getParam("claims"))) {
             params.setEssentialClaims(oauthRequest.getParam("claims"));
         }
+        //With in the same request it can not be used both request parameter and request_uri parameter.
+        if (StringUtils.isNotEmpty(oauthRequest.getParam(REQUEST)) && StringUtils.isNotEmpty(oauthRequest.getParam
+                (REQUEST_URI))) {
+            return EndpointUtil.getErrorPageURL(OAuth2ErrorCodes.INVALID_REQUEST, "Both request and " +
+                    "request_uri parameters can not be associated with the same authorization request."
+                    , null);
+        }
         if (StringUtils.isNotBlank(oauthRequest.getParam(REQUEST))) {
-            params.setRequestObjectClaims(oauthRequest.getParam(REQUEST));
+            String requestObject = oauthRequest.getParam(REQUEST);
+            if (!isJSON(requestObject)) {
+                if (EndpointUtil.getRequestObjectValidator().isSignatureValid(requestObject) && EndpointUtil.
+                        getRequestObjectValidator().isObjectValid(requestObject)) {
+                    params.setRequestParameterClaims(oauthRequest.getParam(REQUEST));
+                } else {
+                    return EndpointUtil.getErrorPageURL(OAuth2ErrorCodes.INVALID_REQUEST, "Request object validation failed"
+                            , null);
+                }
+            } else {
+                params.setRequestParameterClaims(oauthRequest.getParam(REQUEST));
+            }
+        }
+        if (StringUtils.isNotBlank(oauthRequest.getParam(REQUEST_URI))) {
+            params.setRequestUriParameterClaims(oauthRequest.getParam(REQUEST_URI));
         }
         String prompt = oauthRequest.getParam(OAuthConstants.OAuth20Params.PROMPT);
         params.setPrompt(prompt);
@@ -1070,7 +1098,8 @@ public class OAuth2AuthzEndpoint {
         authzReqDTO.setTenantDomain(oauth2Params.getTenantDomain());
         authzReqDTO.setAuthTime(oauth2Params.getAuthTime());
         authzReqDTO.setEssentialClaims(oauth2Params.getEssentialClaims());
-        authzReqDTO.setRequestObjectClaims(oauth2Params.getRequestObjectClaims());
+        authzReqDTO.setRequestParamClaims(oauth2Params.getRequestParameterClaims());
+        authzReqDTO.setRequestUriParamClaims(oauth2Params.getRequestUriParameterClaims());
         return EndpointUtil.getOAuth2Service().authorize(authzReqDTO);
     }
 
