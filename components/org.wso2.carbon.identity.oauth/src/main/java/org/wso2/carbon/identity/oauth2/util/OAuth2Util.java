@@ -18,7 +18,11 @@
 
 package org.wso2.carbon.identity.oauth2.util;
 
+import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSVerifier;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jwt.SignedJWT;
 import org.apache.axiom.om.OMElement;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
 import org.apache.commons.codec.binary.Base64;
@@ -30,6 +34,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.common.message.types.ResponseType;
 import org.json.JSONObject;
 import org.wso2.carbon.base.CarbonBaseConstants;
+import org.wso2.carbon.core.util.KeyStoreManager;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.base.IdentityConstants;
 import org.wso2.carbon.identity.base.IdentityException;
@@ -76,7 +81,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.interfaces.RSAPublicKey;
 import java.sql.Timestamp;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
@@ -1434,6 +1441,55 @@ public class OAuth2Util {
         }
         log.error("Unsupported Signature Algorithm in identity.xml");
         throw new IdentityOAuth2Exception("Unsupported Signature Algorithm in identity.xml");
+    }
+
+
+    /**
+     * Validate Id token signature.
+     *
+     * @param idToken Id token
+     * @return validation state
+     */
+    public static boolean validateIdToken(String idToken) {
+
+        boolean isJWTSignedWithSPKey = OAuthServerConfiguration.getInstance().isJWTSignedWithSPKey();
+        String tenantDomain;
+        try {
+            String clientId = SignedJWT.parse(idToken).getJWTClaimsSet().getAudience().get(0);
+            if (isJWTSignedWithSPKey) {
+                OAuthAppDO oAuthAppDO = OAuth2Util.getAppInformationByClientId(clientId);
+                tenantDomain = OAuth2Util.getTenantDomainOfOauthApp(oAuthAppDO);
+            } else {
+                //It is not sending tenant domain with the subject in id_token by default, So to work this as
+                //expected, need to enable the option "Use tenant domain in local subject identifier" in SP config
+                tenantDomain = MultitenantUtils.getTenantDomain(SignedJWT.parse(idToken).getJWTClaimsSet().getSubject());
+            }
+            if (StringUtils.isEmpty(tenantDomain)) {
+                return false;
+            }
+            int tenantId = IdentityTenantUtil.getTenantId(tenantDomain);
+            RSAPublicKey publicKey;
+            KeyStoreManager keyStoreManager = KeyStoreManager.getInstance(tenantId);
+
+            if (!tenantDomain.equals(org.wso2.carbon.base.MultitenantConstants.SUPER_TENANT_DOMAIN_NAME)) {
+                String ksName = tenantDomain.trim().replace(".", "-");
+                String jksName = ksName + ".jks";
+                publicKey = (RSAPublicKey) keyStoreManager.getKeyStore(jksName).getCertificate(tenantDomain)
+                        .getPublicKey();
+            } else {
+                publicKey = (RSAPublicKey) keyStoreManager.getDefaultPublicKey();
+            }
+            SignedJWT signedJWT = SignedJWT.parse(idToken);
+            JWSVerifier verifier = new RSASSAVerifier(publicKey);
+
+            return signedJWT.verify(verifier);
+        } catch (JOSEException | ParseException e) {
+            log.error("Error occurred while validating id token signature.");
+            return false;
+        } catch (Exception e) {
+            log.error("Error occurred while validating id token signature.");
+            return false;
+        }
     }
 
 }
