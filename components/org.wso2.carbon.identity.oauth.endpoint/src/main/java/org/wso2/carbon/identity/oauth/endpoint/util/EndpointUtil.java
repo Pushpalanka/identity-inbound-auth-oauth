@@ -33,6 +33,7 @@ import org.wso2.carbon.identity.application.authentication.framework.cache.Authe
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticationRequest;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkConstants;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
+import org.wso2.carbon.identity.application.mgt.ApplicationManagementService;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.discovery.DefaultOIDCProcessor;
 import org.wso2.carbon.identity.discovery.OIDCProcessor;
@@ -52,12 +53,12 @@ import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.identity.webfinger.DefaultWebFingerProcessor;
 import org.wso2.carbon.identity.webfinger.WebFingerProcessor;
 
-import javax.servlet.http.HttpServletResponse;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import javax.servlet.http.HttpServletResponse;
 
 public class EndpointUtil {
 
@@ -396,10 +397,16 @@ public class EndpointUtil {
             }
             if (params != null) {
                 consentPage += "?" + OAuthConstants.OIDC_LOGGED_IN_USER + "=" + URLEncoder.encode(loggedInUser,
-                        "UTF-8") + "&application=" + URLEncoder.encode(params.getApplicationName(), "ISO-8859-1") +
-                        "&" + OAuthConstants.OAuth20Params.SCOPE + "=" + URLEncoder.encode(EndpointUtil.getScope
-                        (params), "ISO-8859-1") + "&" + OAuthConstants.SESSION_DATA_KEY_CONSENT + "=" + URLEncoder
-                        .encode(sessionDataKeyConsent, "UTF-8") + "&spQueryParams=" + queryString;
+                        "UTF-8") + "&application=";
+
+                if (StringUtils.isNotEmpty(params.getDisplayName())) {
+                    consentPage += URLEncoder.encode(params.getDisplayName(), "UTF-8");
+                } else {
+                    consentPage += URLEncoder.encode(params.getApplicationName(), "UTF-8");
+                }
+                consentPage = consentPage + "&" + OAuthConstants.OAuth20Params.SCOPE + "=" + URLEncoder.encode
+                        (EndpointUtil.getScope(params), "UTF-8") + "&" + OAuthConstants.SESSION_DATA_KEY_CONSENT
+                        + "=" + URLEncoder.encode(sessionDataKeyConsent, "UTF-8") + "&spQueryParams=" + queryString;
             } else {
                 throw new OAuthSystemException("Error while retrieving the application name");
             }
@@ -418,6 +425,15 @@ public class EndpointUtil {
         return scopes.toString().trim();
     }
 
+    /**
+     * Returns the {@code ApplicationAuthenticationService} instance
+     *
+     * @return
+     */
+    public static ApplicationManagementService getApplicationManagementService() {
+        return (ApplicationManagementService) PrivilegedCarbonContext.getThreadLocalCarbonContext().getOSGiService
+                (ApplicationManagementService.class);
+    }
     public static String getRealmInfo() {
         return "Basic realm=" + getHostName();
     }
