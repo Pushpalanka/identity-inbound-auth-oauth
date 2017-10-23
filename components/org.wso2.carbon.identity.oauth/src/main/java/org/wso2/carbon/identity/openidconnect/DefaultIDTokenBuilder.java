@@ -69,6 +69,7 @@ import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.identity.openidconnect.model.Claim;
 import org.wso2.carbon.idp.mgt.IdentityProviderManagementException;
 import org.wso2.carbon.idp.mgt.IdentityProviderManager;
 import org.wso2.carbon.user.core.UserCoreConstants;
@@ -122,6 +123,7 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
     private static final String kid = "d0ec514a32b6f88c0abd12a2840699bdd3deba9d";
 
     private static final Log log = LogFactory.getLog(DefaultIDTokenBuilder.class);
+    private static final String REQUEST_OBJECT = "requestObject";
     private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
     private static Map<Integer, Certificate> publicCerts = new ConcurrentHashMap<>();
     private OAuthServerConfiguration config = null;
@@ -140,7 +142,6 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
     @Override
     public String buildIDToken(OAuthTokenReqMessageContext request, OAuth2AccessTokenRespDTO tokenRespDTO)
             throws IdentityOAuth2Exception {
-
         String tenantDomain = request.getOauth2AccessTokenReqDTO().getTenantDomain();
         IdentityProvider identityProvider = getResidentIdp(tenantDomain);
 
@@ -234,7 +235,7 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         long authTime = 0;
 
         LinkedHashSet acrValue = new LinkedHashSet();
-        JWTClaimsSet jwtClaimsSet = new JWTClaimsSet();
+
 
         // AuthorizationCode only available for authorization code grant type
         if (request.getProperty(AUTHORIZATION_CODE) != null) {
@@ -243,26 +244,9 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
                 nonceValue = authorizationGrantCacheEntry.getNonceValue();
                 acrValue = authorizationGrantCacheEntry.getAcrValue();
                 authTime = authorizationGrantCacheEntry.getAuthTime();
-                RequestObjectProcessor requestObjectProcessor = OAuthServerConfiguration.getInstance().
-                        getRequestObjectProcessor();
-                ArrayList<String> essentialClaimsfromRequestParam = null;
-                if (StringUtils.isNotEmpty(authorizationGrantCacheEntry.getRequestParameterClaims())) {
-                    essentialClaimsfromRequestParam = requestObjectProcessor.getEssentialClaimsofRequestParam
-                            (authorizationGrantCacheEntry.getRequestParameterClaims(), OAuthConstants.ID_TOKEN);
+                if (authorizationGrantCacheEntry.getRequestObject() != null) {
+                    request.addProperty(REQUEST_OBJECT, authorizationGrantCacheEntry.getRequestObject());
                 }
-                if(CollectionUtils.isNotEmpty(essentialClaimsfromRequestParam)){
-                    for (String essentialClaim : essentialClaimsfromRequestParam) {
-                        if (log.isDebugEnabled()) {
-                            log.debug("Essential claims requested with the request parameter are " + essentialClaim);
-                        }
-                        if (authorizationGrantCacheEntry.getUserAttributes() != null) {
-                            Map<String, Object> userAttributesMap = getClaimsMap(authorizationGrantCacheEntry.getUserAttributes());
-                            if (userAttributesMap.get(essentialClaim) != null)
-                                jwtClaimsSet.setClaim(essentialClaim, userAttributesMap.get(essentialClaim));
-                        }
-                    }
-                }
-
             }
         }
         // Get access token issued time
@@ -309,7 +293,7 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         if (CollectionUtils.isNotEmpty(getOIDCEndpointUrl())) {
             audience.addAll(getOIDCEndpointUrl());
         }
-
+        JWTClaimsSet jwtClaimsSet = new JWTClaimsSet();
         jwtClaimsSet.setIssuer(issuer);
         jwtClaimsSet.setSubject(subject);
         jwtClaimsSet.setAudience(audience);

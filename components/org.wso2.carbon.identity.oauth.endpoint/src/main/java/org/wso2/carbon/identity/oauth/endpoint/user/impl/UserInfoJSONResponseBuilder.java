@@ -30,7 +30,6 @@ import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCache;
 import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCacheEntry;
 import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCacheKey;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
-import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth.endpoint.util.ClaimUtil;
 import org.wso2.carbon.identity.oauth.user.UserInfoClaimRetriever;
 import org.wso2.carbon.identity.oauth.user.UserInfoEndpointException;
@@ -38,7 +37,6 @@ import org.wso2.carbon.identity.oauth.user.UserInfoResponseBuilder;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2TokenValidationResponseDTO;
 import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
-import org.wso2.carbon.identity.openidconnect.RequestObjectProcessor;
 import org.wso2.carbon.registry.core.Resource;
 import org.wso2.carbon.registry.core.exceptions.RegistryException;
 import org.wso2.carbon.registry.core.service.RegistryService;
@@ -57,9 +55,9 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
     private static final Log log = LogFactory.getLog(UserInfoJSONResponseBuilder.class);
     //To store the list of claims which have marked as essential with claims parameter
     private ArrayList<String> essentialClaimsforClaimParam = new ArrayList<>();
+    private String[] requestedScopesFromRequestObject = null;
     //To store the list of claims which have marked as essential with request parameter
     private ArrayList<String> essentialClaimsforRequestParam = new ArrayList<>();
-    private static final String USERINFO = "userinfo";
     private static final String UPDATED_AT = "updated_at";
     private static final String PHONE_NUMBER_VERIFIED = "phone_number_verified";
     private static final String EMAIL_VERIFIED = "email_verified";
@@ -110,7 +108,11 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
             claims = new HashMap<String,Object>();
         }
         String[] arrRequestedScopeClaims = null;
-        for (String requestedScope : tokenResponse.getScope()) {
+        String[] requestedScopes = tokenResponse.getScope();
+        if (requestedScopesFromRequestObject != null && requestedScopesFromRequestObject.length > 0) {
+            requestedScopes = tokenResponse.getScope();
+        }
+        for (String requestedScope : requestedScopes) {
             if (resource != null && resource.getProperties() != null) {
                 Enumeration supporetdScopes = resource.getProperties().propertyNames();
                 while (supporetdScopes.hasMoreElements()) {
@@ -125,7 +127,8 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
                         }
                         for (Map.Entry<String, Object> entry : claims.entrySet()) {
                             String requestedClaims = entry.getKey();
-                            if (Arrays.asList(arrRequestedScopeClaims).contains(requestedClaims)) {
+                            if (Arrays.asList(arrRequestedScopeClaims).contains(requestedClaims) ||
+                                    essentialClaimsforRequestParam.contains(requestedClaims)) {
                                 returnClaims.put(entry.getKey(), claims.get(entry.getKey()));
                                 if (requestedScope.equals("address")) {
                                     if (!requestedScope.equals(ADDRESS)) {
@@ -172,11 +175,6 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
                 returnClaims.put(key, claims.get(key));
             }
         }
-        if (CollectionUtils.isNotEmpty(essentialClaimsforRequestParam)) {
-            for (String key : essentialClaimsforRequestParam) {
-                returnClaims.put(key, claims.get(key));
-            }
-        }
         return JSONUtils.buildJSON(returnClaims);
     }
 
@@ -189,18 +187,14 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
         if (cacheEntry == null) {
             return new HashMap<ClaimMapping, String>();
         }
-
+        requestedScopesFromRequestObject = cacheEntry.getRequestObject().getScopes();
         if (StringUtils.isNotEmpty(cacheEntry.getEssentialClaims())) {
             essentialClaimsforClaimParam = getEssentialClaims(cacheEntry.getEssentialClaims());
         }
 
-        if (StringUtils.isNotEmpty(cacheEntry.getRequestParameterClaims())) {
-            RequestObjectProcessor requestObjectProcessor = OAuthServerConfiguration.getInstance().
-                    getRequestObjectProcessor();
-            if (StringUtils.isNotEmpty(cacheEntry.getRequestParameterClaims())) {
-                essentialClaimsforRequestParam = requestObjectProcessor.getEssentialClaimsofRequestParam(cacheEntry.
-                        getRequestParameterClaims(), USERINFO);
-            }
+        if (cacheEntry.getRequestObject() != null) {
+            essentialClaimsforRequestParam = OAuth2Util.essentialClaimsFromRequestParam(OAuthConstants.USERINFO,
+                    cacheEntry.getRequestObject().getClaimsforRequestParameter());
         }
         return cacheEntry.getUserAttributes();
     }

@@ -482,9 +482,10 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
         if (StringUtils.isNotBlank(authorizeReqDTO.getEssentialClaims())) {
             authorizationGrantCacheEntry.setEssentialClaims(authorizeReqDTO.getEssentialClaims());
         }
-        if (StringUtils.isNotBlank(authorizeReqDTO.getRequestParamClaims())) {
-            authorizationGrantCacheEntry.setRequestParameterClaims(authorizeReqDTO.getRequestParamClaims());
+        if (authorizeReqDTO.getRequestObject() != null) {
+            authorizationGrantCacheEntry.setRequestObject(authorizeReqDTO.getRequestObject());
         }
+
         if (StringUtils.isNotBlank(authorizeReqDTO.getRequestUriParamClaims())) {
             authorizationGrantCacheEntry.setRequestUriParameterClaims(authorizeReqDTO.getRequestUriParamClaims());
         }

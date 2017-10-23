@@ -18,7 +18,8 @@
 package org.wso2.carbon.identity.openidconnect;
 
 /**
- * Validates Request Object
+ * This class validates request object parameter value which comes with the OIDC authorization request as an optional
+ * parameter
  */
 public interface RequestObjectValidator {
 
@@ -37,12 +38,5 @@ public interface RequestObjectValidator {
      * @return true if customize validations are valid
      */
     public boolean isObjectValid(String Object);
-
-    /** For requestURI validations
-     *
-     * @param url
-     * @return true if requestUri is valid
-     */
-    public boolean isRequestUriValid(String url);
 
 }

@@ -56,7 +56,6 @@ import org.wso2.carbon.user.api.Claim;
 import org.wso2.carbon.user.core.UserStoreManager;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
-import java.io.IOException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -565,7 +564,6 @@ public class OAuth2Service extends AbstractAdmin {
     public boolean isPKCESupportEnabled() {
         return OAuth2Util.isPKCESupportEnabled();
     }
-
     private void addRevokeResponseHeaders(OAuthRevocationResponseDTO revokeResponseDTP, String accessToken,
                                           String refreshToken, String authorizedUser) {
 

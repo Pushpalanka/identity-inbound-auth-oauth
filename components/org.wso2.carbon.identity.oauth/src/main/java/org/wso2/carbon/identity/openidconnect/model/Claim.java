@@ -15,28 +15,34 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.wso2.carbon.identity.openidconnect;
+package org.wso2.carbon.identity.openidconnect.model;
 
-import java.util.ArrayList;
+import java.util.Map;
 
 /**
- * This interface is used to process the request object.
+ * This class contains claim object which comes with the request object parameter value in OIDC authorization request.
  */
-public interface RequestObjectProcessor {
 
-    /**
-     * Validates Signature of the requestObject jwt
-     * @param requestObject
-     * @param member
-     * @return essentialClaim list extracted from the request object
-     */
-    public ArrayList<String> getEssentialClaimsofRequestParam(String requestObject,String member);
+public class Claim {
+    private String name;
 
-    /**
-     * Returns requestUrlParam
-     *
-     * @return request uri param from the oidc authorization request
-     */
-    public String getRequestUriParam();
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Map<String, String> getClaimAttributesMap() {
+        return claimAttributesMap;
+    }
+
+    public void setClaimAttributesMap(Map<String, String> claimAttributesMap) {
+        this.claimAttributesMap = claimAttributesMap;
+    }
+
+    private Map<String, String> claimAttributesMap;
+
 
 }

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package org.wso2.carbon.identity.oauth2;
+package org.wso2.carbon.identity.openidconnect;
 
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
@@ -26,7 +26,6 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
-import org.wso2.carbon.identity.openidconnect.RequestObjectValidator;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -52,45 +51,38 @@ import java.util.Properties;
 public class DefaultRequestObjectValidator implements RequestObjectValidator {
 
     private static Log log = LogFactory.getLog(DefaultRequestObjectValidator.class);
+    private static DefaultRequestObjectValidator defaultRequestObjectValidator = new DefaultRequestObjectValidator();
     private static Properties prop;
     private static final Base64 base64Url = new Base64(true);
-    private static JSONObject jsonHeaderObject;
 
     @Override
     public boolean isSignatureValid(String requestObject) {
 
+        JSONObject jsonHeaderObject = null;
         String[] jwtTokenValues = requestObject.split("\\.");
         String jwtAssertion = null;
         byte[] jwtSignature = null;
-        if (jwtTokenValues.length > 0) {
-            String value = new String(base64Url.decode(jwtTokenValues[0].getBytes()));
-            if (log.isDebugEnabled()) {
-                log.debug("JWT Header :" + value);
-            }
-            JSONParser parser = new JSONParser();
-            try {
-                jsonHeaderObject = (JSONObject) parser.parse(value);
-            } catch (ParseException e) {
-                log.error("The Json is invalid.");
-            }
-        }
-        if (jwtTokenValues.length > 1) {
 
-            String value = new String(base64Url.decode(jwtTokenValues[1].getBytes()));
-            if (log.isDebugEnabled()) {
-                log.debug("JWT Body: " + value);
+        if (jwtTokenValues != null) {
+            jsonHeaderObject = getJsonHeaderObject(jsonHeaderObject, jwtTokenValues);
+            if (jwtTokenValues.length > 1) {
+                String bodyValue = new String(base64Url.decode(jwtTokenValues[1].getBytes()));
+                if (log.isDebugEnabled()) {
+                    log.debug("JWT Body: " + bodyValue);
+                }
+                jwtAssertion = jwtTokenValues[0] + "." + jwtTokenValues[1];
             }
-            jwtAssertion = jwtTokenValues[0] + "." + jwtTokenValues[1];
+
+            if (jwtTokenValues.length > 2) {
+                jwtSignature = base64Url.decode(jwtTokenValues[2].getBytes());
+            }
         }
 
-        if (jwtTokenValues.length > 2) {
-            jwtSignature = base64Url.decode(jwtTokenValues[2].getBytes());
-        }
         String thumbPrint = null;
         String signatureAlgo = null;
-        if (jsonHeaderObject.get("x5t") != null) {
+        if (jsonHeaderObject != null && jsonHeaderObject.get("x5t") != null) {
             thumbPrint = new String(base64Url.decode(((String) jsonHeaderObject.get("x5t")).getBytes()));
-        } else if (jsonHeaderObject.get("kid") != null) {
+        } else if (jsonHeaderObject != null && jsonHeaderObject.get("kid") != null) {
             thumbPrint = new String(base64Url.decode(((String) jsonHeaderObject.get("kid")).getBytes()));
         } else {
             return false;
@@ -98,16 +90,7 @@ public class DefaultRequestObjectValidator implements RequestObjectValidator {
         if (jsonHeaderObject.get("alg") != null) {
             signatureAlgo = (String) jsonHeaderObject.get("alg");
         }
-        if ("RS256".equals(signatureAlgo)) {
-            signatureAlgo = "SHA256withRSA";
-        } else if ("RS515".equals(signatureAlgo)) {
-            signatureAlgo = "SHA512withRSA";
-        } else if ("RS384".equals(signatureAlgo)) {
-            signatureAlgo = "SHA384withRSA";
-        } else {
-            // by default
-            signatureAlgo = "SHA256withRSA";
-        }
+        signatureAlgo = getMappedSignatureAlgorithm(signatureAlgo);
 
         if (jwtAssertion != null && jwtSignature != null) {
             try {
@@ -115,15 +98,13 @@ public class DefaultRequestObjectValidator implements RequestObjectValidator {
                 keyStore.load(new FileInputStream(buildFilePath(getPropertyValue(OAuthConstants.CLIENT_TRUST_STORE))),
                         getPropertyValue(OAuthConstants.CLIENT_TRUST_STORE_PASSWORD).toCharArray());
                 String alias = getAliasForX509CertThumb(thumbPrint.getBytes(), keyStore);
+
                 if (StringUtils.isEmpty(alias)) {
                     log.error("Could not obtain the alias from the certificate.");
                     return false;
                 }
-                Certificate certificate = keyStore.getCertificate(alias);
-                Signature signature = Signature.getInstance(signatureAlgo);
-                signature.initVerify(certificate);
-                signature.update(jwtAssertion.getBytes());
-                return signature.verify(jwtSignature);
+
+                return isSignatureVerified(jwtAssertion, jwtSignature, signatureAlgo, keyStore, alias);
             } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException |
                     InvalidKeyException | SignatureException e) {
                 log.error("Signature verification failed.");
@@ -134,13 +115,48 @@ public class DefaultRequestObjectValidator implements RequestObjectValidator {
         return false;
     }
 
-    @Override
-    public boolean isObjectValid(String Object) {
-        return true;
+    private boolean isSignatureVerified(String jwtAssertion, byte[] jwtSignature, String signatureAlgo, KeyStore keyStore
+            , String alias) throws KeyStoreException, NoSuchAlgorithmException, InvalidKeyException, SignatureException {
+        
+        Certificate certificate = keyStore.getCertificate(alias);
+        Signature signature = Signature.getInstance(signatureAlgo);
+        signature.initVerify(certificate);
+        signature.update(jwtAssertion.getBytes());
+        return signature.verify(jwtSignature);
+    }
+
+    private JSONObject getJsonHeaderObject(JSONObject jsonHeaderObject, String[] jwtTokenValues) {
+        if (jwtTokenValues.length > 0) {
+            String headerValue = new String(base64Url.decode(jwtTokenValues[0].getBytes()));
+            if (log.isDebugEnabled()) {
+                log.debug("JWT Header :" + headerValue);
+            }
+            JSONParser parser = new JSONParser();
+            try {
+                jsonHeaderObject = (JSONObject) parser.parse(headerValue);
+            } catch (ParseException e) {
+                log.error("The Json is invalid.");
+            }
+        }
+        return jsonHeaderObject;
+    }
+
+    private String getMappedSignatureAlgorithm(String signatureAlgo) {
+        if ("RS256".equals(signatureAlgo)) {
+            signatureAlgo = "SHA256withRSA";
+        } else if ("RS515".equals(signatureAlgo)) {
+            signatureAlgo = "SHA512withRSA";
+        } else if ("RS384".equals(signatureAlgo)) {
+            signatureAlgo = "SHA384withRSA";
+        } else {
+            // by default
+            signatureAlgo = "SHA256withRSA";
+        }
+        return signatureAlgo;
     }
 
     @Override
-    public boolean isRequestUriValid(String url) {
+    public boolean isObjectValid(String Object) {
         return true;
     }
 

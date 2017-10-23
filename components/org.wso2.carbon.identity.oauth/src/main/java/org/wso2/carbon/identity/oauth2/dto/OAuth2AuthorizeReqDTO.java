@@ -19,6 +19,7 @@
 package org.wso2.carbon.identity.oauth2.dto;
 
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
+import org.wso2.carbon.identity.openidconnect.model.RequestObject;
 
 import java.util.LinkedHashSet;
 import java.util.Properties;
@@ -37,13 +38,17 @@ public class OAuth2AuthorizeReqDTO {
     private String tenantDomain;
     private long authTime;
     private String essentialClaims;
-    private String requestParamClaims;
+    private RequestObject requestObject;
     private String requestUriParamClaims;
 
-    public String getRequestParamClaims() {
-        return requestParamClaims;
+    public RequestObject getRequestObject() {
+        return requestObject;
     }
 
+    public void setRequestObject(RequestObject requestObject) {
+        this.requestObject = requestObject;
+    }
+    
     public void setRequestUriParamClaims(String requestUriParamClaims) {
         this.requestUriParamClaims = requestUriParamClaims;
     }
@@ -51,11 +56,6 @@ public class OAuth2AuthorizeReqDTO {
     public String getRequestUriParamClaims() {
         return requestUriParamClaims;
     }
-
-    public void setRequestParamClaims(String requestParamClaims) {
-        this.requestParamClaims = requestParamClaims;
-    }
-
 
     public String getEssentialClaims() {
         return essentialClaims;
