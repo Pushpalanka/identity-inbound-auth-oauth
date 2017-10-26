@@ -42,11 +42,12 @@ import org.wso2.carbon.registry.core.exceptions.RegistryException;
 import org.wso2.carbon.registry.core.service.RegistryService;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Enumeration;
+import java.util.Arrays;
+import java.util.Iterator;
 
 /**
  *
@@ -55,9 +56,8 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
     private static final Log log = LogFactory.getLog(UserInfoJSONResponseBuilder.class);
     //To store the list of claims which have marked as essential with claims parameter
     private ArrayList<String> essentialClaimsforClaimParam = new ArrayList<>();
-    private String[] requestedScopesFromRequestObject = null;
     //To store the list of claims which have marked as essential with request parameter
-    private ArrayList<String> essentialClaimsforRequestParam = new ArrayList<>();
+    private List<String> essentialClaimsforRequestParam = new ArrayList<>();
     private static final String UPDATED_AT = "updated_at";
     private static final String PHONE_NUMBER_VERIFIED = "phone_number_verified";
     private static final String EMAIL_VERIFIED = "email_verified";
@@ -109,9 +109,6 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
         }
         String[] arrRequestedScopeClaims = null;
         String[] requestedScopes = tokenResponse.getScope();
-        if (requestedScopesFromRequestObject != null && requestedScopesFromRequestObject.length > 0) {
-            requestedScopes = tokenResponse.getScope();
-        }
         for (String requestedScope : requestedScopes) {
             if (resource != null && resource.getProperties() != null) {
                 Enumeration supporetdScopes = resource.getProperties().propertyNames();
@@ -187,11 +184,9 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
         if (cacheEntry == null) {
             return new HashMap<ClaimMapping, String>();
         }
-        requestedScopesFromRequestObject = cacheEntry.getRequestObject().getScopes();
         if (StringUtils.isNotEmpty(cacheEntry.getEssentialClaims())) {
             essentialClaimsforClaimParam = getEssentialClaims(cacheEntry.getEssentialClaims());
         }
-
         if (cacheEntry.getRequestObject() != null) {
             essentialClaimsforRequestParam = OAuth2Util.essentialClaimsFromRequestParam(OAuthConstants.USERINFO,
                     cacheEntry.getRequestObject().getClaimsforRequestParameter());

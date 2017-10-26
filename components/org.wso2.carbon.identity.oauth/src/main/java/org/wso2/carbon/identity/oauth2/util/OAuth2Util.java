@@ -81,6 +81,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
+import java.security.Key;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPublicKey;
@@ -96,6 +97,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.xml.namespace.QName;
@@ -201,6 +203,7 @@ public class OAuth2Util {
     private static ThreadLocal<OAuthAuthzReqMessageContext> authzRequestContext = new ThreadLocal<OAuthAuthzReqMessageContext>();
     //Precompile PKCE Regex pattern for performance improvement
     private static Pattern pkceCodeVerifierPattern = Pattern.compile("[\\w\\-\\._~]+");
+    private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
 
     private OAuth2Util(){
 
@@ -1469,20 +1472,19 @@ public class OAuth2Util {
      * @param requestedClaimsFromRequestParam  claims defined in the value of the request parameter
      * @return the claim list which have attribute vale essentail :true
      */
-    public static ArrayList<String> essentialClaimsFromRequestParam(String claimRequestor, Map<String, List<Claim>>
+    public static List<String> essentialClaimsFromRequestParam(String claimRequestor, Map<String, List<Claim>>
             requestedClaimsFromRequestParam) {
         String attributeValue = null;
-        ArrayList<String> essentialClaimsfromRequestParam = new ArrayList<>();
+        List<String> essentialClaimsfromRequestParam = new ArrayList<>();
         List<Claim> claimsforClaimRequestor = requestedClaimsFromRequestParam.get(claimRequestor);
         for (Claim claimforClaimRequestor : claimsforClaimRequestor) {
             String claim = claimforClaimRequestor.getName();
             Map<String, String> attributesMap = claimforClaimRequestor.getClaimAttributesMap();
             if (attributesMap != null) {
-                for (String attributeKey : attributesMap.keySet()) {
-                    if (StringUtils.isNotBlank(attributeKey)) {
-                        attributeValue = attributesMap.get(attributeKey);
-                    }
-                    if (ESSENTAIL.equals(attributeKey) && Boolean.parseBoolean(attributeValue)) {
+                for (Map.Entry<String, String> attributesEntryMap : attributesMap.entrySet()) {
+                        attributeValue = attributesMap.get(attributesEntryMap.getKey());
+
+                    if (ESSENTAIL.equals(attributesEntryMap.getKey()) && Boolean.parseBoolean(attributeValue)) {
                         essentialClaimsfromRequestParam.add(claim);
                     }
                 }
@@ -1490,5 +1492,4 @@ public class OAuth2Util {
         }
         return essentialClaimsfromRequestParam;
     }
-
 }

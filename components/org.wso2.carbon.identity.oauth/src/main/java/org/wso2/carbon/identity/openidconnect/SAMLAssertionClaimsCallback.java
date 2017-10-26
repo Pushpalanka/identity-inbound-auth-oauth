@@ -212,7 +212,7 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
             claims = getClaimsMap(userAttributes);
         }
         String tenantDomain = requestMsgCtx.getOauth2AccessTokenReqDTO().getTenantDomain();
-        return getFilteredClaims(requestMsgCtx.getScope(), tenantDomain, claims, (RequestObject) requestMsgCtx.
+        return getEssentialClaims(requestMsgCtx.getScope(), tenantDomain, claims, (RequestObject) requestMsgCtx.
                 getProperty(REQUEST_OBJECT));
     }
 
@@ -238,7 +238,7 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
             claims = getClaimsMap(userAttributes);
         }
         String tenantDomain = requestMsgCtx.getAuthorizationReqDTO().getTenantDomain();
-        return getFilteredClaims(requestMsgCtx.getApprovedScope(), tenantDomain, claims,requestMsgCtx.getAuthorizationReqDTO().getRequestObject());
+        return getEssentialClaims(requestMsgCtx.getApprovedScope(), tenantDomain, claims, requestMsgCtx.getAuthorizationReqDTO().getRequestObject());
     }
 
     /**
@@ -548,9 +548,9 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
         }
     }
 
-    private List<String> getFilteredClaimsFromRequestObject(RequestObject requestObject) {
+    private List<String> getEssentialClaims(RequestObject requestObject) {
 
-        ArrayList<String> essentialClaimsfromRequestParam;
+       List<String> essentialClaimsfromRequestParam;
         Map<String, List<Claim>> requestParamClaims = requestObject.getClaimsforRequestParameter();
         essentialClaimsfromRequestParam = OAuth2Util.essentialClaimsFromRequestParam(OAuthConstants.ID_TOKEN,
                 requestParamClaims);
@@ -567,8 +567,8 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
      * @param requestObject   request Object
      * @return
      */
-    private Map<String, Object> getFilteredClaims(String[] requestedScopes, String tenantDomain,
-                                                  Map<String, Object> claims, RequestObject requestObject) {
+    private Map<String, Object> getEssentialClaims(String[] requestedScopes, String tenantDomain,
+                                                   Map<String, Object> claims, RequestObject requestObject) {
         Resource resource = null;
         String requestedScopeClaims = null;
         String[] arrRequestedScopeClaims = null;
@@ -587,9 +587,7 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
         } finally {
             PrivilegedCarbonContext.endTenantFlow();
         }
-        if (requestObject.getScopes() != null && requestObject.getScopes().length > 0) {
-            requestedScopes = requestObject.getScopes();
-        }
+
         for (String requestedScope : requestedScopes) {
             if (resource != null && resource.getProperties() != null) {
                 Enumeration supporetdScopes = resource.getProperties().propertyNames();
@@ -606,7 +604,7 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
                         for (Map.Entry<String, Object> entry : claims.entrySet()) {
                             String requestedClaims = entry.getKey();
                             if (Arrays.asList(arrRequestedScopeClaims).contains(requestedClaims) ||
-                                    getFilteredClaimsFromRequestObject(requestObject).contains(requestedClaims)) {
+                                    getEssentialClaims(requestObject).contains(requestedClaims)) {
                                 returnClaims.put(entry.getKey(), claims.get(entry.getKey()));
                                 if (requestedScope.equals("address")) {
                                     if (!requestedScope.equals("address")) {

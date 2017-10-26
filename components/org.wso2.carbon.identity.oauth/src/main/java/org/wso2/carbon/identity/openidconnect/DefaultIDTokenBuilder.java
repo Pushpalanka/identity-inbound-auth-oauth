@@ -235,8 +235,6 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         long authTime = 0;
 
         LinkedHashSet acrValue = new LinkedHashSet();
-
-
         // AuthorizationCode only available for authorization code grant type
         if (request.getProperty(AUTHORIZATION_CODE) != null) {
             AuthorizationGrantCacheEntry authorizationGrantCacheEntry = getAuthorizationGrantCacheEntry(request);
@@ -322,23 +320,6 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
             return new PlainJWT(jwtClaimsSet).serialize();
         }
         return signJWT(jwtClaimsSet, request);
-    }
-
-    /**
-     * Get claims map
-     *
-     * @param userAttributes User Attributes
-     * @return User attribute map
-     */
-    private Map<String, Object> getClaimsMap(Map<ClaimMapping, String> userAttributes) {
-
-        Map<String, Object> claims = new HashMap();
-        if (MapUtils.isNotEmpty(userAttributes)) {
-            for (Map.Entry<ClaimMapping, String> entry : userAttributes.entrySet()) {
-                claims.put(entry.getKey().getRemoteClaim().getClaimUri(), entry.getValue());
-            }
-        }
-        return claims;
     }
 
     @Override
@@ -470,7 +451,7 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
 
             int tenantId = IdentityTenantUtil.getTenantId(tenantDomain);
 
-            Key privateKey = getPrivateKey(tenantDomain, tenantId);
+            Key privateKey = OAuth2Util.getPrivateKey(tenantDomain, tenantId);
             JWSSigner signer = new RSASSASigner((RSAPrivateKey) privateKey);
             JWSHeader header = new JWSHeader((JWSAlgorithm) signatureAlgorithm);
             header.setKeyID(kid);
@@ -497,7 +478,7 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
 
             int tenantId = IdentityTenantUtil.getTenantId(tenantDomain);
 
-            Key privateKey = getPrivateKey(tenantDomain, tenantId);
+            Key privateKey = OAuth2Util.getPrivateKey(tenantDomain, tenantId);
             JWSSigner signer = new RSASSASigner((RSAPrivateKey) privateKey);
             JWSHeader header = new JWSHeader((JWSAlgorithm) signatureAlgorithm);
             header.setX509CertThumbprint(new Base64URL(getThumbPrint(tenantDomain, tenantId)));
@@ -508,44 +489,6 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         } catch (JOSEException e) {
             throw new IdentityOAuth2Exception("Error occurred while signing JWT", e);
         }
-    }
-
-    private Key getPrivateKey(String tenantDomain, int tenantId) throws IdentityOAuth2Exception {
-        Key privateKey;
-        if (!(privateKeys.containsKey(tenantId))) {
-
-            try {
-                IdentityTenantUtil.initializeRegistry(tenantId, tenantDomain);
-            } catch (IdentityException e) {
-                throw new IdentityOAuth2Exception("Error occurred while loading registry for tenant " + tenantDomain,
-                        e);
-            }
-
-            // get tenant's key store manager
-            KeyStoreManager tenantKSM = KeyStoreManager.getInstance(tenantId);
-
-            if (!tenantDomain.equals(MultitenantConstants.SUPER_TENANT_DOMAIN_NAME)) {
-                // derive key store name
-                String ksName = tenantDomain.trim().replace(".", "-");
-                String jksName = ksName + ".jks";
-                // obtain private key
-                privateKey = tenantKSM.getPrivateKey(jksName, tenantDomain);
-
-            } else {
-                try {
-                    privateKey = tenantKSM.getDefaultPrivateKey();
-                } catch (Exception e) {
-                    throw new IdentityOAuth2Exception("Error while obtaining private key for super tenant", e);
-                }
-            }
-            //privateKey will not be null always
-            privateKeys.put(tenantId, privateKey);
-        } else {
-            //privateKey will not be null because containsKey() true says given key is exist and ConcurrentHashMap
-            // does not allow to store null values
-            privateKey = privateKeys.get(tenantId);
-        }
-        return privateKey;
     }
 
     /**

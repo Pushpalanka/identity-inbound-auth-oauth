@@ -17,6 +17,9 @@
  */
 package org.wso2.carbon.identity.openidconnect;
 
+import org.wso2.carbon.identity.oauth2.RequestObjectException;
+import org.wso2.carbon.identity.oauth2.model.OAuth2Parameters;
+
 /**
  * This class validates request object parameter value which comes with the OIDC authorization request as an optional
  * parameter
@@ -26,17 +29,34 @@ public interface RequestObjectValidator {
     /**
      * Validates Signature of the requestObject jwt
      *
-     * @param requestObject
-     * @return true if signature is valid
+     * @param requestObject requestObject
+     *
      */
-    public boolean isSignatureValid(String requestObject);
+    public void validateSignature(String requestObject) throws RequestObjectException;
 
     /**
-     * For customized validations
+     * To decrypt the request objected by using IS primary key
      *
-     * @param Object
-     * @return true if customize validations are valid
+     * @param requestObject requestObject
+     * @param oAuth2Parameters oAuth2Parameters
+     * @throws RequestObjectException
      */
-    public boolean isObjectValid(String Object);
+    public void decrypt(String requestObject, OAuth2Parameters oAuth2Parameters) throws RequestObjectException;
+
+    /**
+     * To validate request object
+     *
+     * @param requestObject requestObject
+     * @param oAuth2Parameters oAuth2Parameters
+     * @throws RequestObjectException
+     */
+    public void validateRequestObject(String requestObject, OAuth2Parameters oAuth2Parameters)
+            throws RequestObjectException;
+
+    /**
+     * To get the payload value of the requested object if it is encoded or decrpyted
+     * @return payload value
+     */
+    public String getPayload();
 
 }

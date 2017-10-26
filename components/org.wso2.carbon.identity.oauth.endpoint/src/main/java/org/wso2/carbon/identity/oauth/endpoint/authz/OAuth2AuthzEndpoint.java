@@ -19,6 +19,7 @@ package org.wso2.carbon.identity.oauth.endpoint.authz;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -52,12 +53,12 @@ import org.wso2.carbon.identity.oauth.cache.SessionDataCacheEntry;
 import org.wso2.carbon.identity.oauth.cache.SessionDataCacheKey;
 import org.wso2.carbon.identity.oauth.common.OAuth2ErrorCodes;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
-import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth.dao.OAuthAppDAO;
 import org.wso2.carbon.identity.oauth.endpoint.OAuthRequestWrapper;
 import org.wso2.carbon.identity.oauth.endpoint.util.EndpointUtil;
 import org.wso2.carbon.identity.oauth.endpoint.util.OpenIDConnectUserRPStore;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
+import org.wso2.carbon.identity.oauth2.RequestObjectException;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AuthorizeReqDTO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AuthorizeRespDTO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2ClientValidationResponseDTO;
@@ -66,6 +67,7 @@ import org.wso2.carbon.identity.oauth2.model.OAuth2Parameters;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.identity.oidc.session.OIDCSessionState;
 import org.wso2.carbon.identity.oidc.session.util.OIDCSessionManagementUtil;
+import org.wso2.carbon.identity.openidconnect.OIDCRequestObjectFactory;
 import org.wso2.carbon.identity.openidconnect.model.RequestObject;
 import org.wso2.carbon.registry.core.utils.UUIDGenerator;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
@@ -839,59 +841,12 @@ public class OAuth2AuthzEndpoint {
         if (StringUtils.isNotBlank(oauthRequest.getParam("claims"))) {
             params.setEssentialClaims(oauthRequest.getParam("claims"));
         }
-
-        String requestParameterValue = oauthRequest.getParam(REQUEST);
-        String requestURIParameterValue = oauthRequest.getParam(REQUEST_URI);
-        //With in the same request it can not be used both request parameter and request_uri parameter.
-        if (StringUtils.isNotEmpty(requestParameterValue) && StringUtils.isNotEmpty(requestURIParameterValue)) {
-            return EndpointUtil.getErrorPageURL(OAuth2ErrorCodes.INVALID_REQUEST, "Both request and " +
-                    "request_uri parameters can not be associated with the same authorization request."
-                    , null);
+        try {
+            handleOIDCRequestObject(oauthRequest, params);
+        } catch (RequestObjectException e) {
+            //all the error logs are specified at the time when I throw the exception.
+            return EndpointUtil.getErrorPageURL(e.getErrorCode(), e.getErrorMessage(), null);
         }
-
-        RequestObject defaultRequestObject = null;
-        if (StringUtils.isNotBlank(requestParameterValue)) {
-            defaultRequestObject = OAuthServerConfiguration.getInstance().
-                    getRequestObject(requestParameterValue);
-            /**
-             * So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and client_id
-             * parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by OAuth 2.0.
-             * The values for these parameters MUST match those in the Request Object, if present
-             */
-            if (defaultRequestObject != null) {
-                if (!clientId.equals(defaultRequestObject.getClientId()) && !oauthRequest.getResponseType().
-                        equals(defaultRequestObject.getResponseType())) {
-                    return EndpointUtil.getErrorPageURL(OAuth2ErrorCodes.INVALID_REQUEST, "Request Object and Authorization" +
-                            " request contains unmatched client_id or response_type.", null);
-                }
-                if (defaultRequestObject.isSignatureValid() && defaultRequestObject.isValidJson()) {
-                    params.setRequestObject(defaultRequestObject);
-                } else {
-                    return EndpointUtil.getErrorPageURL(OAuth2ErrorCodes.INVALID_REQUEST, "Request object validation failed."
-                            , null);
-                }
-            } else {
-                return EndpointUtil.getErrorPageURL(OAuth2ErrorCodes.INVALID_REQUEST, "Request Object Processing Failed."
-                        , null);
-            }
-        }
-        if (StringUtils.isNotBlank(oauthRequest.getParam(REQUEST_URI))) {
-            String requestUriParameterValue = oauthRequest.getParam(REQUEST_URI);
-            defaultRequestObject = OAuthServerConfiguration.getInstance().
-                    getRequestObject(requestUriParameterValue);
-            if (defaultRequestObject != null && defaultRequestObject.isValidRequestURI()) {
-                params.setRequestUriParameterClaims(oauthRequest.getParam(REQUEST_URI));
-            } else {
-                return EndpointUtil.getErrorPageURL(OAuth2ErrorCodes.INVALID_REQUEST, "Request uri validation failed"
-                        , null);
-            }
-        }
-
-        /**
-         * When the request parameter is used, the OpenID Connect request parameter values contained in the JWT supersede
-         * those passed using the OAuth 2.0 request syntax
-         */
-        supersedeAuthzParameters(params, requestParameterValue, requestURIParameterValue, defaultRequestObject);
         String prompt = oauthRequest.getParam(OAuthConstants.OAuth20Params.PROMPT);
         params.setPrompt(prompt);
 
@@ -999,17 +954,95 @@ public class OAuth2AuthzEndpoint {
         }
     }
 
-    private void supersedeAuthzParameters(OAuth2Parameters params, String requestParameterValue,
-                                          String requestURIParameterValue, RequestObject defaultRequestObject) {
+    private void handleOIDCRequestObject(OAuthAuthzRequest oauthRequest, OAuth2Parameters parameters)
+            throws RequestObjectException {
+        validateRequestObject(oauthRequest);
+        if (isRequestUri(oauthRequest.getParam(REQUEST_URI))) {
+            handleRequestUriParameter(oauthRequest, oauthRequest.getParam(REQUEST_URI),parameters);
+        } else {
+            handleRequestParameter(oauthRequest, parameters, oauthRequest.getParam(REQUEST));
+        }
+    }
+
+    private boolean isRequestUri(String param) {
+        return StringUtils.isNotBlank(param);
+    }
+
+    private void validateRequestObject(OAuthAuthzRequest oauthRequest)
+            throws RequestObjectException {
+        //With in the same request it can not be used both request parameter and request_uri parameter.
+        if (StringUtils.isNotEmpty(oauthRequest.getParam(REQUEST)) && StringUtils.isNotEmpty
+                (oauthRequest.getParam(REQUEST_URI))) {
+            throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST, "Both request and " +
+                    "request_uri parameters can not be associated with the same authorization request.");
+        }
+    }
+
+    private void handleRequestUriParameter(OAuthAuthzRequest oauthRequest, String requestURIParameterValue,
+                                           OAuth2Parameters parameters)
+            throws RequestObjectException {
+        if (StringUtils.isNotBlank(requestURIParameterValue)) {
+            OIDCRequestObjectFactory.buildRequestObject(oauthRequest, parameters);
+            /**
+             * When the request parameter is used, the OpenID Connect request parameter values contained in the JWT supersede
+             * those passed using the OAuth 2.0 request syntax
+             */
+            overrideAuthzParameters(parameters, oauthRequest.getParam(REQUEST), oauthRequest.getParam(REQUEST_URI));
+        }
+    }
+
+    private void handleRequestParameter(OAuthAuthzRequest oauthRequest, OAuth2Parameters parameters,
+                                        String requestParameterValue) throws RequestObjectException {
+        if (StringUtils.isNotBlank(requestParameterValue)) {
+            RequestObject requestObject = getRequestObject(oauthRequest, parameters);
+            if (requestObject == null) {
+                throw new RequestObjectException(OAuth2ErrorCodes.INVALID_REQUEST, "Can not build the request object as " +
+                        "request object instance is null.");
+            }
+            validateSignatureAndContent(parameters, requestObject);
+            /**
+             * When the request parameter is used, the OpenID Connect request parameter values contained in the JWT supersede
+             * those passed using the OAuth 2.0 request syntax
+             */
+            overrideAuthzParameters(parameters, oauthRequest.getParam(REQUEST), oauthRequest.getParam(REQUEST_URI));
+        }
+    }
+
+    private void validateSignatureAndContent(OAuth2Parameters params, RequestObject requestObject) throws
+            RequestObjectException {
+        if (requestObject.isSignatureValid()) {
+            params.setRequestObject(requestObject);
+            if (log.isDebugEnabled()) {
+                log.debug("The request Object is valid. Hence storing the request object value in oauth params.");
+            }
+        } else {
+            if (log.isDebugEnabled()) {
+                log.debug("The request signature validation failed as the json is invalid.");
+            }
+            throw new RequestObjectException(OAuth2ErrorCodes.INVALID_REQUEST, "Request object signature " +
+                    "validation failed.");
+        }
+    }
+
+    private RequestObject getRequestObject(OAuthAuthzRequest oauthRequest,OAuth2Parameters parameters) throws RequestObjectException {
+        OIDCRequestObjectFactory.buildRequestObject(oauthRequest,parameters);
+        return RequestObject.getInstance();
+    }
+
+    private void overrideAuthzParameters(OAuth2Parameters params, String requestParameterValue,
+                                         String requestURIParameterValue) {
         if (StringUtils.isNotBlank(requestParameterValue) || StringUtils.isNotBlank(requestURIParameterValue)) {
-            if (defaultRequestObject.getRedirectUri() != null) {
-                params.setRedirectURI(defaultRequestObject.getRedirectUri());
+            if (StringUtils.isNotBlank(RequestObject.getInstance().getRedirectUri())) {
+                params.setRedirectURI(RequestObject.getInstance().getRedirectUri());
             }
-            if (defaultRequestObject.getNonce() != null) {
-                params.setNonce(defaultRequestObject.getNonce());
+            if (StringUtils.isNotBlank(RequestObject.getInstance().getNonce())) {
+                params.setNonce(RequestObject.getInstance().getNonce());
             }
-            if (defaultRequestObject.getState() != null) {
-                params.setState(defaultRequestObject.getState());
+            if (StringUtils.isNotBlank(RequestObject.getInstance().getState())) {
+                params.setState(RequestObject.getInstance().getState());
+            }
+            if (ArrayUtils.isNotEmpty(RequestObject.getInstance().getScopes())) {
+                params.setScopes(new HashSet<>(Arrays.asList(RequestObject.getInstance().getScopes())));
             }
         }
     }

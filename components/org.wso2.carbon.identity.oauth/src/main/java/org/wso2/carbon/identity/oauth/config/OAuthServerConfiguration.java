@@ -54,12 +54,12 @@ import org.wso2.carbon.identity.oauth2.token.handlers.grant.saml.SAML2TokenCallb
 import org.wso2.carbon.identity.oauth2.validators.OAuth2ScopeValidator;
 import org.wso2.carbon.identity.openidconnect.CustomClaimsCallbackHandler;
 import org.wso2.carbon.identity.openidconnect.IDTokenBuilder;
-import org.wso2.carbon.identity.openidconnect.model.RequestObject;
+import org.wso2.carbon.identity.openidconnect.RequestObjectBuilder;
+import org.wso2.carbon.identity.openidconnect.RequestObjectValidatorImpl;
+
 import org.wso2.carbon.identity.openidconnect.RequestObjectValidator;
 import org.wso2.carbon.utils.CarbonUtils;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -93,6 +93,13 @@ public class OAuthServerConfiguration {
             "org.wso2.carbon.identity.oauth2.token.handlers.grant.saml.SAML2BearerGrantHandler";
     private static final String IWA_NTLM_BEARER_GRANT_HANDLER_CLASS =
             "org.wso2.carbon.identity.oauth2.token.handlers.grant.iwa.ntlm.NTLMAuthenticationGrantHandler";
+
+    //request object builder classes
+    private static final String REQUEST_PARAM_VALUE_BUILDER_CLASS =
+            "org.wso2.carbon.identity.openidconnect.RequestParamRequestObjectBuilder";
+    private static final String REQUEST_PARAM_VALUE_BUILDER = "request_param_value_builder";
+    private static final String REQUEST_URI_PARAM_VALUE_BUILDER = "request_uri_param_value_builder";
+
     private static Log log = LogFactory.getLog(OAuthServerConfiguration.class);
     private static OAuthServerConfiguration instance;
     private static String oauth1RequestTokenUrl = null;
@@ -128,6 +135,7 @@ public class OAuthServerConfiguration {
     private Map<String, String> supportedGrantTypeClassNames = new HashMap<>();
     private Map<String, String> idTokenAllowedForGrantTypesMap = new HashMap<>();
     private Map<String, AuthorizationGrantHandler> supportedGrantTypes;
+    private Map<String, RequestObjectBuilder> requestObjectBuilder;
     private Map<String, String> supportedGrantTypeValidatorNames = new HashMap<>();
     private Map<String, Class<? extends OAuthValidator<HttpServletRequest>>> supportedGrantTypeValidators;
     private Map<String, String> supportedResponseTypeClassNames = new HashMap<>();
@@ -153,12 +161,11 @@ public class OAuthServerConfiguration {
 
     // OpenID Connect configurations
     private String openIDConnectIDTokenBuilderClassName = "org.wso2.carbon.identity.openidconnect.DefaultIDTokenBuilder";
-    private String defaultRequestObjectClassName = "org.wso2.carbon.identity.openidconnect.model.DefaultRequestObject";
-    private String defaultRequestValidatorClassName = "org.wso2.carbon.identity.openidconnect.DefaultRequestObjectValidator";
+    private String defaultRequestValidatorClassName = "org.wso2.carbon.identity.openidconnect.RequestObjectValidatorImpl";
     private String openIDConnectIDTokenCustomClaimsHanlderClassName = "org.wso2.carbon.identity.openidconnect.SAMLAssertionClaimsCallback";
     private IDTokenBuilder openIDConnectIDTokenBuilder = null;
-    private RequestObject defaultRequestObject = null;
-    private RequestObjectValidator defaultRequestObjectValidator = null;
+    private Map<String, String> requestObjectBuilderClassNames = new HashMap<>();
+    private RequestObjectValidator requestObjectValidator = null;
     private CustomClaimsCallbackHandler openidConnectIDTokenCustomClaimsCallbackHandler = null;
     private String openIDConnectIDTokenIssuerIdentifier = null;
     private String openIDConnectIDTokenSubClaim = "http://wso2.org/claims/fullname";
@@ -243,6 +250,9 @@ public class OAuthServerConfiguration {
 
         // read supported grant types
         parseSupportedGrantTypesConfig(oauthElem);
+
+        //read request object builder classes
+        parseRequestObjectConfig(oauthElem);
 
         // read supported response types
         parseSupportedResponseTypesConfig(oauthElem);
@@ -766,60 +776,61 @@ public class OAuthServerConfiguration {
     }
 
     /**
-     * Returns the custom claims builder for the IDToken
+     * Returns an instance of RequestObjectValidator
      *
-     * @return
+     * @return instance of RequestObjectValidator
      */
     public RequestObjectValidator getRequestObjectValidator() {
-        if (defaultRequestObjectValidator == null) {
+        if (requestObjectValidator == null) {
             synchronized (RequestObjectValidator.class) {
-                if (defaultRequestObjectValidator == null) {
+                if (requestObjectValidator == null) {
                     try {
                         Class clazz =
                                 Thread.currentThread().getContextClassLoader()
                                         .loadClass(defaultRequestValidatorClassName);
-                        defaultRequestObjectValidator = (RequestObjectValidator) clazz.newInstance();
-                    } catch (ClassNotFoundException e) {
-                        log.error("Error while instantiating the RequestObjectValidator ", e);
-                    } catch (InstantiationException e) {
-                        log.error("Error while instantiating the RequestObjectValidator ", e);
-                    } catch (IllegalAccessException e) {
-                        log.error("Error while instantiating the RequestObjectValidator ", e);
+                        requestObjectValidator = (RequestObjectValidator) clazz.newInstance();
+                    } catch (ClassNotFoundException|InstantiationException|IllegalAccessException e) {
+                        log.warn("Failed to initiate RequestObjectValidator from identity.xml. " +
+                                "Hence initiating the default implementation");
+                        requestObjectValidator = new RequestObjectValidatorImpl();
                     }
                 }
             }
         }
-        return defaultRequestObjectValidator;
+        return requestObjectValidator;
     }
 
     /**
-     * Return an instance of the RequestObject
+     * Return an instance of the RequestObjectBuilder
      *
-     * @return instance of the RequestObject
+     * @return instance of the RequestObjectBuilder
      */
-    public RequestObject getRequestObject(String requestedClaims) {
-        synchronized (RequestObject.class) {
-                try {
-                    Class clazz =
-                            Thread.currentThread().getContextClassLoader()
-                                    .loadClass(defaultRequestObjectClassName);
-                    Constructor constructor = clazz.getDeclaredConstructor(String.class);
-
-                    defaultRequestObject = (RequestObject) constructor.newInstance(requestedClaims);
-                } catch (ClassNotFoundException e) {
-                    log.error("Error while instantiating the RequestObject ", e);
-                } catch (InstantiationException e) {
-                    log.error("Error while instantiating the RequestObject ", e);
-                } catch (IllegalAccessException e) {
-                    log.error("Error while instantiating the RequestObject ", e);
-                } catch (NoSuchMethodException e) {
-
-                } catch (InvocationTargetException e) {
-
+    public Map<String, RequestObjectBuilder> getRequestObjectBuilders() {
+        if (requestObjectBuilder == null) {
+            synchronized (this) {
+                if (requestObjectBuilder == null) {
+                    Map<String, RequestObjectBuilder> requestBuilderTemp = new HashMap<>();
+                    for (Map.Entry<String, String> entry : requestObjectBuilderClassNames.entrySet()) {
+                        RequestObjectBuilder requestObjectBuilder = null;
+                        try {
+                            requestObjectBuilder = (RequestObjectBuilder) Class.forName(entry.getValue()).newInstance();
+                        } catch (InstantiationException|IllegalAccessException|ClassNotFoundException e) {
+                            log.error("Error instantiating " + entry.getValue(), e);
+                        }
+                        if (requestObjectBuilder != null) {
+                            requestBuilderTemp.put(entry.getKey(), requestObjectBuilder);
+                        } else {
+                            log.warn("Failed to initiate request object builder class which is associated with the " +
+                                    "builder " + entry.getKey());
+                        }
+                    }
+                    requestObjectBuilder = requestBuilderTemp;
                 }
+            }
         }
-        return defaultRequestObject;
+        return requestObjectBuilder;
     }
+
 
     /**
      * Returns the custom claims builder for the IDToken
@@ -1326,6 +1337,50 @@ public class OAuthServerConfiguration {
         }
     }
 
+    private void parseRequestObjectConfig(OMElement oauthConfigElem) {
+
+        OMElement requestObjectBuildersElem =
+                oauthConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.REQUEST_OBJECT_BUILDERS));
+
+        if (requestObjectBuildersElem != null) {
+            Iterator<OMElement> iterator = requestObjectBuildersElem
+                    .getChildrenWithName(getQNameWithIdentityNS(ConfigElements.REQUEST_OBJECT_BUILDER));
+            while (iterator.hasNext()) {
+                OMElement requestObjectBuildersElement = iterator.next();
+                OMElement builderNameElement = requestObjectBuildersElement
+                        .getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.BUILDER_NAME));
+                String builderName = null;
+                if (builderNameElement != null) {
+                    builderName = builderNameElement.getText();
+                }
+
+                OMElement requestObjectImplClassElement = requestObjectBuildersElement
+                        .getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.REQUEST_OBJECT_IMPL_CLASS));
+                String requestObjectImplClass = null;
+                if (requestObjectImplClassElement != null) {
+                    requestObjectImplClass = requestObjectImplClassElement.getText();
+                }
+                requestObjectBuilderClassNames.put(builderName, requestObjectImplClass);
+            }
+        } else {
+            // if this element is not present, assume the default case.
+            log.warn("\'RequestObjectBuilders\' element not configured in identity.xml. " +
+                    "Therefore instantiating default request object builders");
+
+            Map<String, String> defaultRequestObjectBuilders = new HashMap<>(2);
+            defaultRequestObjectBuilders.put(REQUEST_PARAM_VALUE_BUILDER, REQUEST_PARAM_VALUE_BUILDER_CLASS);
+            requestObjectBuilderClassNames.putAll(defaultRequestObjectBuilders);
+        }
+
+        if (log.isDebugEnabled()) {
+            for (Map.Entry entry : requestObjectBuilderClassNames.entrySet()) {
+                String builderName = entry.getKey().toString();
+                String requestObjectBuilderImplClass = entry.getValue().toString();
+                log.debug(builderName + " is associated with " + requestObjectBuilderImplClass);
+            }
+        }
+    }
+
     private void parseSupportedGrantTypesConfig(OMElement oauthConfigElem) {
 
         OMElement supportedGrantTypesElem =
@@ -1627,12 +1682,6 @@ public class OAuthServerConfiguration {
                                 .getText().trim();
             }
             if (openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.
-                    REQUEST_OBJECT)) != null) {
-                defaultRequestObjectClassName =
-                        openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.
-                                REQUEST_OBJECT)).getText().trim();
-            }
-            if (openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.
                     REQUEST_OBJECT_VALIDATOR)) != null) {
                 defaultRequestValidatorClassName =
                         openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.
@@ -1807,6 +1856,12 @@ public class OAuthServerConfiguration {
         // Token issuer generator.
         private static final String OAUTH_TOKEN_GENERATOR = "OAuthTokenGenerator";
         private static final String IDENTITY_OAUTH_TOKEN_GENERATOR = "IdentityOAuthTokenGenerator";
+
+        //Request Object Configs
+        private static final String REQUEST_OBJECT_BUILDERS = "RequestObjectBuilders";
+        private static final String REQUEST_OBJECT_BUILDER = "RequestObjectBuilder";
+        private static final String BUILDER_NAME = "BuilderName";
+        private static final String REQUEST_OBJECT_IMPL_CLASS = "RequestObjectBuilderImplClass";
 
         // Supported Grant Types
         private static final String SUPPORTED_GRANT_TYPES = "SupportedGrantTypes";

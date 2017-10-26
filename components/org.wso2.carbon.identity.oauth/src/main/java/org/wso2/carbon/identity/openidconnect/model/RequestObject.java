@@ -17,45 +17,154 @@
  */
 package org.wso2.carbon.identity.openidconnect.model;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
-import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 /**
- * This interface is used to model the request object which comes as a parameter of the OIDC authorization request
+ * This class is used to model the request object which comes as a parameter of the OIDC authorization request
  */
-public interface RequestObject extends Serializable {
-    static final long serialVersionUID = -4449780649560053452L;
+public class RequestObject {
 
-    public void processRequestObject(String requestObject);
+    private static String clientId;
+    private static String redirectUri;
+    private static String[] scopes;
+    private static String state;
+    private static String nonce;
+    private static String iss;
+    private static String aud;
+    private static String responseType;
+    private static String maxAge;
+    private static boolean isSignatureValid = true;
+    private static boolean isValidRequestURI = true;
+    //This iss used for extensions
+    private Map<String, Object> properties = new HashMap<String, Object>();
+    //To store the claims requestor and the the requested claim list. claim requestor can be either userinfo or id token
+    // or any custom member.
+    private static Map<String, List<Claim>> claimsforRequestParameter = new HashMap<>();
+    private static Log log = LogFactory.getLog(RequestObject.class);
+    private static volatile RequestObject instance = null;
 
-    public Map<String, List<Claim>> getClaimsforRequestParameter();
+    /**
+     * Returns RequestObject singleton instance.
+     *
+     * @return RequestObject instance
+     */
+    public static RequestObject getInstance() {
+        if (instance == null) {
+            synchronized (RequestObject.class) {
+                if (instance == null) {
+                    instance = new RequestObject();
+                }
+            }
+        }
+        return instance;
+    }
 
-    public String getRedirectUri();
+    public Map<String, List<Claim>> getClaimsforRequestParameter() {
+        return claimsforRequestParameter;
+    }
 
-    public String getState();
+    public void setClaimsforRequestParameter(Map<String, List<Claim>> claimsforRequestParameter) {
+        this.claimsforRequestParameter = claimsforRequestParameter;
+    }
 
-    public String getNonce();
+    public String getRedirectUri() {
+        return redirectUri;
+    }
 
-    public String getIss();
+    public void setRedirectUri(String redirectUri) {
+        this.redirectUri = redirectUri;
+    }
 
-    public String getAud();
+    public String getState() {
+        return state;
+    }
 
-    public String getResponseType();
+    public void setState(String state) {
+        this.state = state;
+    }
 
-    public String getMaxAge();
+    public String getNonce() {
+        return nonce;
+    }
 
-    public String getClientId();
+    public void setNonce(String nonce) {
+        this.nonce = nonce;
+    }
 
-    public boolean isSignatureValid();
+    public String getIss() {
+        return iss;
+    }
 
-    public Map<String, Object> getProperties();
+    public void setIss(String iss) {
+        this.iss = iss;
+    }
 
-    public boolean isValidJson();
+    public String getAud() {
+        return aud;
+    }
 
-    public String[] getScopes();
+    public void setAud(String aud) {
+        this.aud = aud;
+    }
 
-    public boolean isValidRequestURI();
+    public String getResponseType() {
+        return responseType;
+    }
 
+    public void setResponseType(String responseType) {
+        this.responseType = responseType;
+    }
+
+    public String getMaxAge() {
+        return maxAge;
+    }
+
+    public void setMaxAge(String maxAge) {
+        this.maxAge = maxAge;
+    }
+
+    public String getClientId() {
+        return clientId;
+    }
+
+    public void setClientId(String clientId) {
+        this.clientId = clientId;
+    }
+
+    public boolean isSignatureValid() {
+        return isSignatureValid;
+    }
+
+    public void setIsSignatureValid(boolean isSignatureValid) {
+        this.isSignatureValid = isSignatureValid;
+    }
+
+    public Map<String, Object> getProperties() {
+        return properties;
+    }
+
+    public void setProperties(Map<String, Object> properties) {
+        this.properties = properties;
+    }
+
+    public String[] getScopes() {
+        return scopes;
+    }
+
+    public void setScopes(String[] scopes) {
+        RequestObject.scopes = scopes;
+    }
+
+    public boolean isValidRequestURI() {
+        return isValidRequestURI;
+    }
+
+    public void setIsValidRequestURI(boolean isValidRequestURI) {
+        this.isValidRequestURI = isValidRequestURI;
+    }
 }
