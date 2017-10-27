@@ -216,7 +216,7 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
             }
         } else {
             // todo add proper error message/error code
-            return handleError(OAuthError.TokenResponse.INVALID_REQUEST, "Refresh token is expired.", oauth2AccessTokenReqDTO);
+            return handleError(OAuthError.TokenResponse.INVALID_GRANT, "Refresh token is expired.", oauth2AccessTokenReqDTO);
         }
 
         Timestamp timestamp = new Timestamp(new Date().getTime());
