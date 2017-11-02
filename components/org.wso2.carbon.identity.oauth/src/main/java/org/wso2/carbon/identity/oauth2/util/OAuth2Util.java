@@ -736,7 +736,7 @@ public class OAuth2Util {
         long accessTokenIssuedTime = accessTokenDO.getIssuedTime().getTime();
         long accessTokenValidity = calculateValidityInMillis(accessTokenIssuedTime, accessTokenValidityPeriodMillis);
 
-        if(accessTokenValidity > 1000 && refreshTokenValidity > 1000){
+        if (accessTokenValidity > 1000 && refreshTokenValidity > 1000) {
             return accessTokenValidity;
         }
         return 0;
@@ -1455,8 +1455,7 @@ public class OAuth2Util {
      * @param redirectURL
      * @return true if a valid json
      */
-    public static boolean isJSON(String redirectURL) {
-
+    public static boolean isValidJson(String redirectURL) {
         try {
             new JSONObject(redirectURL);
         } catch (JSONException ex) {
@@ -1492,4 +1491,103 @@ public class OAuth2Util {
         }
         return essentialClaimsfromRequestParam;
     }
+
+    /**
+     * Validate Id token signature.
+     *
+     * @param idToken Id token
+     * @return validation state
+     */
+    public static boolean validateIdToken(String idToken) {
+
+        boolean isJWTSignedWithSPKey = OAuthServerConfiguration.getInstance().isJWTSignedWithSPKey();
+        String tenantDomain;
+        try {
+            String clientId = SignedJWT.parse(idToken).getJWTClaimsSet().getAudience().get(0);
+            if (isJWTSignedWithSPKey) {
+                OAuthAppDO oAuthAppDO = OAuth2Util.getAppInformationByClientId(clientId);
+                tenantDomain = OAuth2Util.getTenantDomainOfOauthApp(oAuthAppDO);
+            } else {
+                //It is not sending tenant domain with the subject in id_token by default, So to work this as
+                //expected, need to enable the option "Use tenant domain in local subject identifier" in SP config
+                tenantDomain = MultitenantUtils.getTenantDomain(SignedJWT.parse(idToken).getJWTClaimsSet().getSubject());
+            }
+            if (StringUtils.isEmpty(tenantDomain)) {
+                return false;
+            }
+            int tenantId = IdentityTenantUtil.getTenantId(tenantDomain);
+            RSAPublicKey publicKey;
+            KeyStoreManager keyStoreManager = KeyStoreManager.getInstance(tenantId);
+
+            if (!tenantDomain.equals(org.wso2.carbon.base.MultitenantConstants.SUPER_TENANT_DOMAIN_NAME)) {
+                String ksName = tenantDomain.trim().replace(".", "-");
+                String jksName = ksName + ".jks";
+                publicKey = (RSAPublicKey) keyStoreManager.getKeyStore(jksName).getCertificate(tenantDomain)
+                        .getPublicKey();
+            } else {
+                publicKey = (RSAPublicKey) keyStoreManager.getDefaultPublicKey();
+            }
+            SignedJWT signedJWT = SignedJWT.parse(idToken);
+            JWSVerifier verifier = new RSASSAVerifier(publicKey);
+
+            return signedJWT.verify(verifier);
+        } catch (JOSEException | ParseException e) {
+            log.error("Error occurred while validating id token signature.");
+            return false;
+        } catch (Exception e) {
+            log.error("Error occurred while validating id token signature.");
+            return false;
+        }
+    }
+
+    /**
+     * Returns the private key of the keystore manager.
+     * @param tenantDomain tenant domain
+     * @param tenantId tenant id
+     * @return private key
+     * @throws IdentityOAuth2Exception
+     */
+    public static Key getPrivateKey(String tenantDomain, int tenantId) throws IdentityOAuth2Exception {
+        Key privateKey;
+        if (!(privateKeys.containsKey(tenantId))) {
+
+            try {
+                IdentityTenantUtil.initializeRegistry(tenantId, tenantDomain);
+            } catch (IdentityException e) {
+                throw new IdentityOAuth2Exception("Error occurred while loading registry for tenant " + tenantDomain,
+                        e);
+            }
+            // Get tenant's key store manager
+            KeyStoreManager tenantKSM = KeyStoreManager.getInstance(tenantId);
+
+            privateKey = derivePrivateKey(tenantDomain, tenantKSM);
+            // PrivateKey will not be null always
+            privateKeys.put(tenantId, privateKey);
+        } else {
+            // PrivateKey will not be null because containsKey() true says given key is exist and ConcurrentHashMap
+            // does not allow to store null values.
+            privateKey = privateKeys.get(tenantId);
+        }
+        return privateKey;
+    }
+
+    private static Key derivePrivateKey(String tenantDomain, KeyStoreManager tenantKSM) throws IdentityOAuth2Exception {
+        Key privateKey;
+        if (!tenantDomain.equals(org.wso2.carbon.base.MultitenantConstants.SUPER_TENANT_DOMAIN_NAME)) {
+            // Derive key store name
+            String ksName = tenantDomain.trim().replace(".", "-");
+            String jksName = ksName + ".jks";
+            // Obtain private key
+            privateKey = tenantKSM.getPrivateKey(jksName, tenantDomain);
+
+        } else {
+            try {
+                privateKey = tenantKSM.getDefaultPrivateKey();
+            } catch (Exception e) {
+                throw new IdentityOAuth2Exception("Error while obtaining private key for super tenant", e);
+            }
+        }
+        return privateKey;
+    }
 }
+

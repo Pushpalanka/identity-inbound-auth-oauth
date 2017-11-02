@@ -23,12 +23,12 @@ import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.RequestObjectException;
 import org.wso2.carbon.identity.oauth2.model.OAuth2Parameters;
 import org.wso2.carbon.identity.openidconnect.model.RequestObject;
-//Todo this is used in oidc spec
 
 /**
- * This factory class is used to invoke the related request object builder classes.
+ * According to the OIDC spec requestObject is passed as a query param value of request/request_uri parameters. This is
+ * associated with OIDC authorization request. This class is used to select the corresponding builder class and build the
+ * request object according to the parameter.
  */
-
 public class OIDCRequestObjectFactory {
 
     private static final String REQUEST = "request";
@@ -44,26 +44,29 @@ public class OIDCRequestObjectFactory {
      * @param oauthRequest authorization request
      * @throws RequestObjectException
      */
-    public static void buildRequestObject(OAuthAuthzRequest oauthRequest, OAuth2Parameters oAuth2Parameters)
-            throws RequestObjectException {
+    public static void buildRequestObject(OAuthAuthzRequest oauthRequest, OAuth2Parameters oAuth2Parameters,
+                                          RequestObject requestObject) throws RequestObjectException {
         /**
          * So that the request is a valid OAuth 2.0 Authorization Request, values for the response_type and client_id
          * parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by OAuth 2.0.
          * The values for these parameters MUST match those in the Request Object, if present
          */
-        if (isRequestParameter(oauthRequest.getParam(REQUEST))) {
-            getBuildRequestObject(REQUEST_PARAM_VALUE_BUILDER).buildRequestObject(oauthRequest.getParam(REQUEST),
-                    oAuth2Parameters);
-            validateClientIdAndResponseType(oauthRequest);
-        } else if (isRequestUri(REQUEST_URI)) {
-            getBuildRequestObject(REQUEST_URI_PARAM_VALUE_BUILDER).buildRequestObject(oauthRequest.getParam(REQUEST_URI)
-                    , oAuth2Parameters);
+        if (getBuildRequestObject(REQUEST_URI_PARAM_VALUE_BUILDER) != null) {
+            if (isRequestParameter(oauthRequest.getParam(REQUEST))) {
+                getBuildRequestObject(REQUEST_PARAM_VALUE_BUILDER).buildRequestObject(oauthRequest.getParam(REQUEST),
+                        oAuth2Parameters, requestObject);
+                validateClientIdAndResponseType(oauthRequest, requestObject);
+            } else if (isRequestUri(REQUEST_URI)) {
+                getBuildRequestObject(REQUEST_URI_PARAM_VALUE_BUILDER).buildRequestObject(oauthRequest.
+                        getParam(REQUEST_URI), oAuth2Parameters, requestObject);
+            }
         }
     }
 
-    private static void validateClientIdAndResponseType(OAuthAuthzRequest oauthRequest) throws RequestObjectException {
-        if (!oauthRequest.getParam(CLIENT_ID).equals(RequestObject.getInstance().getClientId()) ||
-                !oauthRequest.getParam(RESPONSE_TYPE).equals(RequestObject.getInstance().getResponseType())) {
+    private static void validateClientIdAndResponseType(OAuthAuthzRequest oauthRequest, RequestObject requestObject)
+            throws RequestObjectException {
+        if (!oauthRequest.getParam(CLIENT_ID).equals(requestObject.getClientId()) ||
+                !oauthRequest.getParam(RESPONSE_TYPE).equals(requestObject.getResponseType())) {
             throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST, "Request Object and " +
                     "Authorization request contains unmatched client_id or response_type");
         }

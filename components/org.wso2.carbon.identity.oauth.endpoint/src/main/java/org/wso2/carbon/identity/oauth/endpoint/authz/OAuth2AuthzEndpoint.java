@@ -17,6 +17,7 @@
  */
 package org.wso2.carbon.identity.oauth.endpoint.authz;
 
+import com.nimbusds.jwt.SignedJWT;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.ArrayUtils;
@@ -42,8 +43,12 @@ import org.wso2.carbon.identity.application.authentication.framework.model.Commo
 import org.wso2.carbon.identity.application.authentication.framework.model.CommonAuthResponseWrapper;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkConstants;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
+import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
 import org.wso2.carbon.identity.application.common.model.Claim;
 import org.wso2.carbon.identity.application.common.model.ClaimMapping;
+import org.wso2.carbon.identity.application.common.model.ServiceProvider;
+import org.wso2.carbon.identity.application.common.model.ServiceProviderProperty;
+import org.wso2.carbon.identity.application.mgt.ApplicationManagementService;
 import org.wso2.carbon.identity.oauth.IdentityOAuthAdminException;
 import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCache;
 import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCacheEntry;
@@ -53,7 +58,9 @@ import org.wso2.carbon.identity.oauth.cache.SessionDataCacheEntry;
 import org.wso2.carbon.identity.oauth.cache.SessionDataCacheKey;
 import org.wso2.carbon.identity.oauth.common.OAuth2ErrorCodes;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
+import org.wso2.carbon.identity.oauth.common.exception.InvalidOAuthClientException;
 import org.wso2.carbon.identity.oauth.dao.OAuthAppDAO;
+import org.wso2.carbon.identity.oauth.dao.OAuthAppDO;
 import org.wso2.carbon.identity.oauth.endpoint.OAuthRequestWrapper;
 import org.wso2.carbon.identity.oauth.endpoint.util.EndpointUtil;
 import org.wso2.carbon.identity.oauth.endpoint.util.OpenIDConnectUserRPStore;
@@ -78,6 +85,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -113,6 +121,7 @@ public class OAuth2AuthzEndpoint {
     private static final String AUTHENTICATION_RESULT_ERROR_PARAM_KEY = "AuthenticationError";
     private static final String REQUEST = "request";
     private static final String REQUEST_URI = "request_uri";
+    private static final String DISPLAY_NAME = "DisplayName";
 
     @GET
     @Path("/")
@@ -765,6 +774,16 @@ public class OAuth2AuthzEndpoint {
         OAuthAuthzRequest oauthRequest = new CarbonOAuthAuthzRequest(req);
 
         OAuth2Parameters params = new OAuth2Parameters();
+        if (EndpointUtil.getOAuthServerConfiguration().isShowDisplayNameInConsentPage()) {
+            ServiceProvider serviceProvider = getServiceProvider(clientId);
+            ServiceProviderProperty[] serviceProviderProperties = serviceProvider.getSpProperties();
+            for (ServiceProviderProperty serviceProviderProperty : serviceProviderProperties) {
+                if (DISPLAY_NAME.equals(serviceProviderProperty.getName())) {
+                    params.setDisplayName(serviceProviderProperty.getValue());
+                    break;
+                }
+            }
+        }
         params.setClientId(clientId);
         params.setRedirectURI(clientDTO.getCallbackURL());
         params.setResponseType(oauthRequest.getResponseType());
@@ -844,7 +863,7 @@ public class OAuth2AuthzEndpoint {
         try {
             handleOIDCRequestObject(oauthRequest, params);
         } catch (RequestObjectException e) {
-            //all the error logs are specified at the time when I throw the exception.
+            // All the error logs are specified at the time when throw the exception.
             return EndpointUtil.getErrorPageURL(e.getErrorCode(), e.getErrorMessage(), null);
         }
         String prompt = oauthRequest.getParam(OAuthConstants.OAuth20Params.PROMPT);
@@ -958,41 +977,33 @@ public class OAuth2AuthzEndpoint {
             throws RequestObjectException {
         validateRequestObject(oauthRequest);
         if (isRequestUri(oauthRequest.getParam(REQUEST_URI))) {
-            handleRequestUriParameter(oauthRequest, oauthRequest.getParam(REQUEST_URI),parameters);
-        } else {
-            handleRequestParameter(oauthRequest, parameters, oauthRequest.getParam(REQUEST));
+            handleRequestObject(oauthRequest, parameters, oauthRequest.getParam(REQUEST_URI));
+        } else if (isRequestParameter(oauthRequest.getParam(REQUEST))) {
+            handleRequestObject(oauthRequest, parameters, oauthRequest.getParam(REQUEST));
         }
     }
 
+    // To check whether the parameter is 'request_uri'.
     private boolean isRequestUri(String param) {
         return StringUtils.isNotBlank(param);
     }
 
-    private void validateRequestObject(OAuthAuthzRequest oauthRequest)
-            throws RequestObjectException {
-        //With in the same request it can not be used both request parameter and request_uri parameter.
-        if (StringUtils.isNotEmpty(oauthRequest.getParam(REQUEST)) && StringUtils.isNotEmpty
-                (oauthRequest.getParam(REQUEST_URI))) {
+    // To check whether the parameter is 'request'.
+    private boolean isRequestParameter(String param) {
+        return StringUtils.isNotBlank(param);
+    }
+
+    private void validateRequestObject(OAuthAuthzRequest oauthRequest) throws RequestObjectException {
+        // With in the same request it can not be used both request parameter and request_uri parameter.
+        if (StringUtils.isNotEmpty(oauthRequest.getParam(REQUEST)) && StringUtils.isNotEmpty(oauthRequest.getParam
+                (REQUEST_URI))) {
             throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST, "Both request and " +
                     "request_uri parameters can not be associated with the same authorization request.");
         }
     }
 
-    private void handleRequestUriParameter(OAuthAuthzRequest oauthRequest, String requestURIParameterValue,
-                                           OAuth2Parameters parameters)
-            throws RequestObjectException {
-        if (StringUtils.isNotBlank(requestURIParameterValue)) {
-            OIDCRequestObjectFactory.buildRequestObject(oauthRequest, parameters);
-            /**
-             * When the request parameter is used, the OpenID Connect request parameter values contained in the JWT supersede
-             * those passed using the OAuth 2.0 request syntax
-             */
-            overrideAuthzParameters(parameters, oauthRequest.getParam(REQUEST), oauthRequest.getParam(REQUEST_URI));
-        }
-    }
-
-    private void handleRequestParameter(OAuthAuthzRequest oauthRequest, OAuth2Parameters parameters,
-                                        String requestParameterValue) throws RequestObjectException {
+    private void handleRequestObject(OAuthAuthzRequest oauthRequest, OAuth2Parameters parameters,
+                                     String requestParameterValue) throws RequestObjectException {
         if (StringUtils.isNotBlank(requestParameterValue)) {
             RequestObject requestObject = getRequestObject(oauthRequest, parameters);
             if (requestObject == null) {
@@ -1004,7 +1015,8 @@ public class OAuth2AuthzEndpoint {
              * When the request parameter is used, the OpenID Connect request parameter values contained in the JWT supersede
              * those passed using the OAuth 2.0 request syntax
              */
-            overrideAuthzParameters(parameters, oauthRequest.getParam(REQUEST), oauthRequest.getParam(REQUEST_URI));
+            overrideAuthzParameters(parameters, oauthRequest.getParam(REQUEST), oauthRequest.getParam(REQUEST_URI),
+                    requestObject);
         }
     }
 
@@ -1024,25 +1036,27 @@ public class OAuth2AuthzEndpoint {
         }
     }
 
-    private RequestObject getRequestObject(OAuthAuthzRequest oauthRequest,OAuth2Parameters parameters) throws RequestObjectException {
-        OIDCRequestObjectFactory.buildRequestObject(oauthRequest,parameters);
-        return RequestObject.getInstance();
+    private RequestObject getRequestObject(OAuthAuthzRequest oauthRequest, OAuth2Parameters parameters)
+            throws RequestObjectException {
+        RequestObject requestObject = new RequestObject();
+        OIDCRequestObjectFactory.buildRequestObject(oauthRequest, parameters, requestObject);
+        return requestObject;
     }
 
     private void overrideAuthzParameters(OAuth2Parameters params, String requestParameterValue,
-                                         String requestURIParameterValue) {
+                                         String requestURIParameterValue, RequestObject requestObject) {
         if (StringUtils.isNotBlank(requestParameterValue) || StringUtils.isNotBlank(requestURIParameterValue)) {
-            if (StringUtils.isNotBlank(RequestObject.getInstance().getRedirectUri())) {
-                params.setRedirectURI(RequestObject.getInstance().getRedirectUri());
+            if (StringUtils.isNotBlank(requestObject.getRedirectUri())) {
+                params.setRedirectURI(requestObject.getRedirectUri());
             }
-            if (StringUtils.isNotBlank(RequestObject.getInstance().getNonce())) {
-                params.setNonce(RequestObject.getInstance().getNonce());
+            if (StringUtils.isNotBlank(requestObject.getNonce())) {
+                params.setNonce(requestObject.getNonce());
             }
-            if (StringUtils.isNotBlank(RequestObject.getInstance().getState())) {
-                params.setState(RequestObject.getInstance().getState());
+            if (StringUtils.isNotBlank(requestObject.getState())) {
+                params.setState(requestObject.getState());
             }
-            if (ArrayUtils.isNotEmpty(RequestObject.getInstance().getScopes())) {
-                params.setScopes(new HashSet<>(Arrays.asList(RequestObject.getInstance().getScopes())));
+            if (ArrayUtils.isNotEmpty(requestObject.getScopes())) {
+                params.setScopes(new HashSet<>(Arrays.asList(requestObject.getScopes())));
             }
         }
     }
@@ -1058,6 +1072,25 @@ public class OAuth2AuthzEndpoint {
         return EndpointUtil.getOAuth2Service().validateClientInfo(clientId, callbackURL);
     }
 
+    /**
+     * Return ServiceProvider for the given clientId
+     *
+     * @param clientId
+     * @return
+     * @throws OAuthSystemException if couldn't retrieve ServiceProvider Information
+     */
+    private ServiceProvider getServiceProvider(String clientId) throws OAuthSystemException {
+        ApplicationManagementService applicationManagementService = EndpointUtil.getApplicationManagementService();
+        try {
+            OAuthAppDO oAuthAppDO = OAuth2Util.getAppInformationByClientId(clientId);
+            String tenantDomain = OAuth2Util.getTenantDomainOfOauthApp(oAuthAppDO);
+            return applicationManagementService.getServiceProvider(oAuthAppDO.getApplicationName(), tenantDomain);
+        } catch (IdentityOAuth2Exception | InvalidOAuthClientException | IdentityApplicationManagementException e) {
+            String msg = "Couldn't retrieve Service Provider for clientId:" + clientId;
+            log.error(msg, e);
+            throw new OAuthSystemException(msg, e);
+        }
+    }
     /**
      * prompt : none
      * The Authorization Server MUST NOT display any authentication
@@ -1116,22 +1149,47 @@ public class OAuth2AuthzEndpoint {
 
         } else if ((OAuthConstants.Prompt.NONE).equals(oauth2Params.getPrompt())) {
             //Returning error if the user has not previous session
-            if (sessionDataCacheEntry.getLoggedInUser() == null) {
+            if (user == null) {
+                errorResponse = EndpointUtil
+                        .getErrorRedirectURL(OAuthProblemException.error(OAuth2ErrorCodes.LOGIN_REQUIRED),
+                                             oauth2Params);
                 return errorResponse;
-            } else {
+            }
+            String idTokenHint = oauth2Params.getIDTokenHint();
+            //Evaluate the id_token_hint value if it is associate with the request.
+            if (StringUtils.isNotEmpty(idTokenHint)) {
+                try {
+                    if (!OAuth2Util.validateIdToken(idTokenHint)) {
+                        String msg = "ID token signature validation failed.";
+                        log.error(msg);
+                        return errorResponse;
+                    }
+                    String subjectValue = SignedJWT.parse(idTokenHint).getJWTClaimsSet().getSubject();
+                    if (StringUtils.isNotEmpty(loggedInUser) && loggedInUser.equals(subjectValue)) {
+                        if (skipConsent || hasUserApproved) {
+                            String redirectUrl =
+                                    handleUserConsent(request, APPROVE, oauth2Params, sessionDataCacheEntry,
+                                                      sessionState);
+                            sessionState.setAuthenticated(false);
+                            return redirectUrl;
+                        } else {
+                            errorResponse = EndpointUtil.getErrorRedirectURL(
+                                    OAuthProblemException.error(OAuth2ErrorCodes.CONSENT_REQUIRED), oauth2Params);
+                            return errorResponse;
+                        }
+                    } else {
+                        errorResponse = EndpointUtil.getErrorRedirectURL(
+                                OAuthProblemException.error(OAuth2ErrorCodes.LOGIN_REQUIRED), oauth2Params);
+                        return errorResponse;
+                    }
+                } catch (ParseException e) {
+                    String msg = "Error while getting clientId from the IdTokenHint.";
+                    log.error(msg, e);
+                    return errorResponse;
+                }
+            }else {
                 sessionState.setAddSessionState(true);
                 if (skipConsent || hasUserApproved) {
-                    /**
-                     * Recommended Parameter : id_token_hint
-                     * As per the specification https://openid.net/specs/openid-connect-session-1_0.html#RFC6454,
-                     * it's recommended to expect id_token_hint parameter to determine which RP initiated the request.
-                     */
-
-                    /**
-                     * todo: At the moment we do not persist id_token issued for clients, thus we could not retrieve
-                     * todo: the RP that a specific id_token has been issued.
-                     * todo: Should validate the RP against the id_token_hint received.
-                     */
 
                     String redirectUrl =
                             handleUserConsent(request, APPROVE, oauth2Params, sessionDataCacheEntry, sessionState);

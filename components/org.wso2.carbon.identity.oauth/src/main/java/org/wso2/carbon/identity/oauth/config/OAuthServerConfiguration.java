@@ -94,11 +94,10 @@ public class OAuthServerConfiguration {
     private static final String IWA_NTLM_BEARER_GRANT_HANDLER_CLASS =
             "org.wso2.carbon.identity.oauth2.token.handlers.grant.iwa.ntlm.NTLMAuthenticationGrantHandler";
 
-    //request object builder classes
+    // Request object builder class.
     private static final String REQUEST_PARAM_VALUE_BUILDER_CLASS =
             "org.wso2.carbon.identity.openidconnect.RequestParamRequestObjectBuilder";
     private static final String REQUEST_PARAM_VALUE_BUILDER = "request_param_value_builder";
-    private static final String REQUEST_URI_PARAM_VALUE_BUILDER = "request_uri_param_value_builder";
 
     private static Log log = LogFactory.getLog(OAuthServerConfiguration.class);
     private static OAuthServerConfiguration instance;
@@ -184,6 +183,8 @@ public class OAuthServerConfiguration {
 
     // property added to fix IDENTITY-4112 in backward compatible manner
     private boolean isRevokeResponseHeadersEnabled = true;
+    // property to make DisplayName property to be used in consent page
+    private boolean showDisplayNameInConsentPage=false;
 
     private OAuthServerConfiguration() {
         buildOAuthServerConfiguration();
@@ -251,7 +252,7 @@ public class OAuthServerConfiguration {
         // read supported grant types
         parseSupportedGrantTypesConfig(oauthElem);
 
-        //read request object builder classes
+        // Read request object builder classes
         parseRequestObjectConfig(oauthElem);
 
         // read supported response types
@@ -289,10 +290,29 @@ public class OAuthServerConfiguration {
         parseOAuthTokenIssuerConfig(oauthElem);
 
         parseRevokeResponseHeadersEnableConfig(oauthElem);
+        parseShowDisplayNameInConsentPage(oauthElem);
+    }
+
+    private void parseShowDisplayNameInConsentPage(OMElement oauthElem) {
+        OMElement showApplicationNameInConsentPageElement = oauthElem
+                .getFirstChildWithName(getQNameWithIdentityNS(ConfigElements
+                        .IDENTITY_OAUTH_SHOW_DISPLAY_NAME_IN_CONSENT_PAGE));
+        if (showApplicationNameInConsentPageElement != null) {
+            showDisplayNameInConsentPage = Boolean.parseBoolean(showApplicationNameInConsentPageElement.getText());
+        }
     }
 
     public Set<OAuthCallbackHandlerMetaData> getCallbackHandlerMetaData() {
         return callbackHandlerMetaData;
+    }
+
+    /**
+     * Returns the value of ShowDisplayNameInConsentPage configuration.
+     *
+     * @return
+     */
+    public boolean isShowDisplayNameInConsentPage() {
+        return showDisplayNameInConsentPage;
     }
 
     public String getOAuth1RequestTokenUrl() {
@@ -1367,7 +1387,7 @@ public class OAuthServerConfiguration {
             log.warn("\'RequestObjectBuilders\' element not configured in identity.xml. " +
                     "Therefore instantiating default request object builders");
 
-            Map<String, String> defaultRequestObjectBuilders = new HashMap<>(2);
+            Map<String, String> defaultRequestObjectBuilders = new HashMap<>();
             defaultRequestObjectBuilders.put(REQUEST_PARAM_VALUE_BUILDER, REQUEST_PARAM_VALUE_BUILDER_CLASS);
             requestObjectBuilderClassNames.putAll(defaultRequestObjectBuilders);
         }
@@ -1857,7 +1877,7 @@ public class OAuthServerConfiguration {
         private static final String OAUTH_TOKEN_GENERATOR = "OAuthTokenGenerator";
         private static final String IDENTITY_OAUTH_TOKEN_GENERATOR = "IdentityOAuthTokenGenerator";
 
-        //Request Object Configs
+        // Request Object Configs
         private static final String REQUEST_OBJECT_BUILDERS = "RequestObjectBuilders";
         private static final String REQUEST_OBJECT_BUILDER = "RequestObjectBuilder";
         private static final String BUILDER_NAME = "BuilderName";
@@ -1891,6 +1911,7 @@ public class OAuthServerConfiguration {
 
         // To enable revoke response headers
         private static final String ENABLE_REVOKE_RESPONSE_HEADERS = "EnableRevokeResponseHeaders";
+        private static final String IDENTITY_OAUTH_SHOW_DISPLAY_NAME_IN_CONSENT_PAGE = "ShowDisplayNameInConsentPage";
     }
 
 }

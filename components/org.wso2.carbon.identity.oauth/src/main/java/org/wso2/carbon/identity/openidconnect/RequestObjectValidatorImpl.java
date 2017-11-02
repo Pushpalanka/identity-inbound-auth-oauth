@@ -19,19 +19,18 @@
 package org.wso2.carbon.identity.openidconnect;
 
 import com.nimbusds.jose.JOSEException;
-import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.crypto.RSADecrypter;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.EncryptedJWT;
+import com.nimbusds.jwt.SignedJWT;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 import net.minidev.json.parser.ParseException;
-import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.wso2.carbon.core.util.KeyStoreManager;
-import org.wso2.carbon.identity.base.IdentityException;
-import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
+import org.apache.commons.codec.binary.Base64;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.RequestObjectException;
@@ -45,7 +44,6 @@ import java.io.InputStream;
 
 import java.security.Key;
 import java.security.KeyStore;
-import java.security.Signature;
 import java.security.MessageDigest;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -54,10 +52,9 @@ import java.security.SignatureException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
 import java.util.Enumeration;
-import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * This class validates request object parameter value which comes with the OIDC authorization request as an optional
@@ -66,14 +63,26 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class RequestObjectValidatorImpl implements RequestObjectValidator {
 
+    private static final String X5T = "x5t";
+    private static final String KID = "kid";
+    private static final String JKU = "jku";
+    private static final String JWK = "jwk";
+    private static final String X5U = "x5u";
+    private static final String X5C = "x5c";
+    private static final String X5T_S256 = "x5t#s256";
+    //JWE is consists of five parts seperated by 4 '.'s as JOSE header , JWE encrypted key, Initialization vector,
+    // Cipher text and Authentication Tag
+    private static final int NUMBER_OF_PARTS_IN_JWE = 5;
+    //JWS is consists of three parts seperated by 2 '.'s as JOSE header, JWS payload, JWS signature
+    private static final int NUMBER_OF_PARTS_IN_JWS = 3;
+
     private static Log log = LogFactory.getLog(RequestObjectValidatorImpl.class);
-    private static Properties prop;
-    private static final Base64 base64Url = new Base64(true);
-    String jwtAssertion;
-    byte[] jwtSignature;
-    String headerValue;
+    private static Properties properties;
+    private String jwtAssertion;
+    private byte[] jwtSignature;
+    private String headerValue;
     private static String payload;
-    private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
+    private static final Base64 base64Url = new Base64(true);
 
     public String getPayload() {
         return payload;
@@ -83,59 +92,38 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
         RequestObjectValidatorImpl.payload = payload;
     }
 
-   ;private void processJwtToken(String[] jwtTokenValues) throws RequestObjectException {
-        String bodyValue;
-        if (jwtTokenValues.length > 0) {
-            headerValue = new String(base64Url.decode(jwtTokenValues[0].getBytes()));
-            if (log.isDebugEnabled()) {
-                log.debug("JWT Header :" + headerValue);
-            }
-        }
-
-        if (jwtTokenValues.length > 1) {
-            bodyValue = new String(base64Url.decode(jwtTokenValues[1].getBytes()));
-            if (log.isDebugEnabled()) {
-                log.debug("JWT Body: " + bodyValue);
-            }
-            setPayload(bodyValue);
-            jwtAssertion = jwtTokenValues[0] + "." + jwtTokenValues[1];
-        }
-
-        if (jwtTokenValues.length > 2) {
-            jwtSignature = base64Url.decode(jwtTokenValues[2].getBytes());
-        }
-    }
-
     @Override
     public void validateSignature(String requestObject) throws RequestObjectException {
         String thumbPrint;
-        String signatureAlgo = JWSAlgorithm.NONE.toString();
-        String[] jwtTokenValues = requestObject.split("\\.");
-
-        if (jwtTokenValues != null) {
-            processJwtToken(jwtTokenValues);
-        }
-
-        if (getJsonHeaderObject() != null && getJsonHeaderObject().get("x5t") != null) {
-            thumbPrint = getJsonHeaderObject().get("x5t").toString();
-        } else if (getJsonHeaderObject() != null && getJsonHeaderObject().get("kid") != null) {
-            thumbPrint = getJsonHeaderObject().get("kid").toString();
+        // The public key corresponding to the key used to sign the message can be any of these header elements:
+        // jku, jwk, kid, x5u, x5c, x5t and x5t#s256
+        if (getJsonHeaderObject() != null) {
+            if (getJsonHeaderObject().get(X5T) != null) {
+                thumbPrint = getJsonHeaderObject().get(X5T).toString();
+            } else if (getJsonHeaderObject().get(KID) != null) {
+                thumbPrint = getJsonHeaderObject().get(KID).toString();
+            } else if (getJsonHeaderObject().get(JKU) != null) {
+                thumbPrint = getJsonHeaderObject().get(JKU).toString();
+            } else if (getJsonHeaderObject().get(JWK) != null) {
+                thumbPrint = getJsonHeaderObject().get(JWK).toString();
+            } else if (getJsonHeaderObject().get(X5U) != null) {
+                thumbPrint = getJsonHeaderObject().get(X5U).toString();
+            } else if (getJsonHeaderObject().get(X5C) != null) {
+                thumbPrint = getJsonHeaderObject().get(X5C).toString();
+            } else if (getJsonHeaderObject().get(X5T_S256) != null) {
+                thumbPrint = getJsonHeaderObject().get(X5T_S256).toString();
+            } else {
+                throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST, "Can not find the " +
+                        "certificate thumbprint for signature validation");
+            }
         } else {
-            throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST, "Can not find the certificate" +
-                    " thumbprint for signature validation");
+            throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST, "The request object " +
+                    "header is null. Hence signature validation failed.");
         }
         if (log.isDebugEnabled()) {
             log.debug("The certificate thumbPrint value for the certificate is: " + thumbPrint);
         }
-
-        if (getJsonHeaderObject().get("alg") != null) {
-            signatureAlgo = (String) getJsonHeaderObject().get("alg");
-        }
-        signatureAlgo = getMappedSignatureAlgorithm(signatureAlgo);
-        if (log.isDebugEnabled()) {
-            log.debug("The signature algorithm used to sign the jwt is: " + signatureAlgo);
-        }
-        verifySignature(thumbPrint, signatureAlgo);
+        verifyJWTSignature(thumbPrint, requestObject);
     }
 
     /**
@@ -152,7 +140,7 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
             encryptedJWT = EncryptedJWT.parse(requestObject);
             String tenantDomain = getTenantDomainForDecryption(oAuth2Parameters);
             int tenantId = OAuth2Util.getTenantId(tenantDomain);
-            Key key = getPrivateKey(tenantDomain, tenantId);
+            Key key = OAuth2Util.getPrivateKey(tenantDomain, tenantId);
             RSAPrivateKey rsaPrivateKey =(RSAPrivateKey)key;
             RSADecrypter decrypter = new RSADecrypter(rsaPrivateKey);
             encryptedJWT.decrypt(decrypter);
@@ -161,7 +149,7 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
             }
             //if the request object is a nested jwt then the payload of the jwe is a jws.
             if (encryptedJWT != null && encryptedJWT.getCipherText() != null && encryptedJWT.getCipherText().toString()
-                    .split(".").length == 3) {
+                    .split(".").length == NUMBER_OF_PARTS_IN_JWS) {
                 validateSignature(encryptedJWT.getCipherText().toString());
                 if (log.isDebugEnabled()) {
                     log.debug("As the request object is a nested jwt, passed the payload to validate the signature.");
@@ -183,14 +171,22 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
     @Override
     public void validateRequestObject(String requestObject, OAuth2Parameters oAuth2Parameters)
             throws RequestObjectException {
-        if (!OAuth2Util.isJSON(requestObject)) {
+        if (!OAuth2Util.isValidJson(requestObject)) {
             String[] jwtTokenValues = requestObject.split("\\.");
-            if (jwtTokenValues.length == 3) {
+            if (jwtTokenValues.length == NUMBER_OF_PARTS_IN_JWS) {
+                processRequestObject(jwtTokenValues);
                 validateSignature(requestObject);
-            } else if (jwtTokenValues.length == 5) {
+            } else if (jwtTokenValues.length == NUMBER_OF_PARTS_IN_JWE) {
                 decrypt(requestObject, oAuth2Parameters);
             }
         }
+    }
+
+    private void processRequestObject(String[] jwtTokenValues) {
+        headerValue = new String(base64Url.decode(jwtTokenValues[0].getBytes()));
+        jwtSignature = base64Url.decode(jwtTokenValues[2].getBytes());
+        jwtAssertion = jwtTokenValues[0] + "." + jwtTokenValues[1];
+        setPayload(jwtTokenValues[1]);
     }
 
     /**
@@ -203,7 +199,7 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
         return oAuth2Parameters.getTenantDomain();
     }
 
-    private void verifySignature(String thumbPrint, String signatureAlgo) throws RequestObjectException {
+    private void verifyJWTSignature(String thumbPrint, String requestObject) throws RequestObjectException {
         if (jwtAssertion != null && jwtSignature != null) {
             try {
                 KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
@@ -216,10 +212,9 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
                     throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST, "Could not obtain" +
                             " the alias from the certificate.");
                 }
-
-                isSignatureVerified(jwtAssertion, jwtSignature, signatureAlgo, keyStore, alias);
+                verifySignature(requestObject, keyStore, alias);
             } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException |
-                    InvalidKeyException | SignatureException e) {
+                    InvalidKeyException | SignatureException | JOSEException | java.text.ParseException e) {
                 throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST, e.getMessage());
             }
         } else {
@@ -227,41 +222,30 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
         }
     }
 
-    private boolean isSignatureVerified(String jwtAssertion, byte[] jwtSignature, String signatureAlgo, KeyStore keyStore
-            , String alias) throws KeyStoreException, NoSuchAlgorithmException, InvalidKeyException, SignatureException {
+    private void verifySignature(String requestObject, KeyStore keyStore
+            , String alias) throws KeyStoreException, NoSuchAlgorithmException, InvalidKeyException, SignatureException,
+            JOSEException, java.text.ParseException, RequestObjectException {
         Certificate certificate = keyStore.getCertificate(alias);
-        Signature signature = Signature.getInstance(signatureAlgo);
-        signature.initVerify(certificate);
-        signature.update(jwtAssertion.getBytes());
-        return signature.verify(jwtSignature);
+        // Get public key
+        RSAPublicKey publicKey = (RSAPublicKey) certificate.getPublicKey();
+        JWSVerifier verifier = new RSASSAVerifier(publicKey);
+        SignedJWT signedJWT = SignedJWT.parse(requestObject);
+        if(!signedJWT.verify(verifier)){
+            throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST,"Signature validation failed.");
+        }
     }
 
     private JSONObject getJsonHeaderObject() throws RequestObjectException {
-
         JSONParser parser = new JSONParser();
-        JSONObject jsonHeaderObject = null;
+        JSONObject jsonHeaderObject;
         try {
             jsonHeaderObject = (JSONObject) parser.parse(headerValue);
         } catch (ParseException e) {
-            log.error("The Json is invalid.");
+            log.error("JWT json header is invalid.");
             throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST, "JWT json header is " +
                     "invalid.");
         }
         return jsonHeaderObject;
-    }
-
-    private String getMappedSignatureAlgorithm(String signatureAlgo) {
-        if ("RS256".equals(signatureAlgo)) {
-            signatureAlgo = "SHA256withRSA";
-        } else if ("RS515".equals(signatureAlgo)) {
-            signatureAlgo = "SHA512withRSA";
-        } else if ("RS384".equals(signatureAlgo)) {
-            signatureAlgo = "SHA384withRSA";
-        } else {
-            // by default
-            signatureAlgo = "SHA256withRSA";
-        }
-        return signatureAlgo;
     }
 
     /**
@@ -271,7 +255,6 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
      * @return Absolute file path
      */
     private static String buildFilePath(String path) {
-
         if (StringUtils.isNotEmpty(path) && path.startsWith(".")) {
             // Relative file path is given
             File currentDirectory = new File(new File(".")
@@ -279,7 +262,7 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
             try {
                 path = currentDirectory.getCanonicalPath() + File.separator + path;
             } catch (IOException e) {
-                log.error("Error occured while re·trieving current directory path");
+                log.error("Error occured while retrieving current directory path");
             }
         }
 
@@ -296,15 +279,14 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
      * @return Property value
      */
     private static String getPropertyValue(String key) throws IOException {
-
-        if (prop == null) {
-            prop = new Properties();
+        if (properties == null) {
+            properties = new Properties();
             String configFilePath = buildFilePath(OAuthConstants.CONFIG_RELATIVE_PATH);
             File configFile = new File(configFilePath);
             InputStream inputStream = new FileInputStream(configFile);
-            prop.load(inputStream);
+            properties.load(inputStream);
         }
-        return prop.getProperty(key);
+        return properties.getProperty(key);
     }
 
     private static String getAliasForX509CertThumb(byte[] thumb, KeyStore keyStore) throws RequestObjectException {
@@ -339,8 +321,7 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
 
     private static String hexify(byte bytes[]) {
         char[] hexDigits =
-                {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd',
-                        'e', 'f'};
+                {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
         StringBuilder buf = new StringBuilder(bytes.length * 2);
         for (byte aByte : bytes) {
             buf.append(hexDigits[(aByte & 0xf0) >> 4]);
@@ -348,42 +329,4 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
         }
         return buf.toString();
     }
-
-    public static Key getPrivateKey(String tenantDomain, int tenantId) throws IdentityOAuth2Exception {
-        Key privateKey;
-        if (!(privateKeys.containsKey(tenantId))) {
-
-            try {
-                IdentityTenantUtil.initializeRegistry(tenantId, tenantDomain);
-            } catch (IdentityException e) {
-                throw new IdentityOAuth2Exception("Error occurred while loading registry for tenant " + tenantDomain,
-                        e);
-            }
-            // get tenant's key store manager
-            KeyStoreManager tenantKSM = KeyStoreManager.getInstance(tenantId);
-
-            if (!tenantDomain.equals(org.wso2.carbon.base.MultitenantConstants.SUPER_TENANT_DOMAIN_NAME)) {
-                // derive key store name
-                String ksName = tenantDomain.trim().replace(".", "-");
-                String jksName = ksName + ".jks";
-                // obtain private key
-                privateKey = tenantKSM.getPrivateKey(jksName, tenantDomain);
-
-            } else {
-                try {
-                    privateKey = tenantKSM.getDefaultPrivateKey();
-                } catch (Exception e) {
-                    throw new IdentityOAuth2Exception("Error while obtaining private key for super tenant", e);
-                }
-            }
-            //privateKey will not be null always
-            privateKeys.put(tenantId, privateKey);
-        } else {
-            //privateKey will not be null because containsKey() true says given key is exist and ConcurrentHashMap
-            // does not allow to store null values
-            privateKey = privateKeys.get(tenantId);
-        }
-        return privateKey;
-    }
-
 }

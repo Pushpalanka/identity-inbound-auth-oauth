@@ -42,7 +42,9 @@ import java.security.interfaces.RSAPrivateKey;
 
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyString;
-import static org.powermock.api.mockito.PowerMockito.*;
+import static org.powermock.api.mockito.PowerMockito.mock;
+import static org.powermock.api.mockito.PowerMockito.mockStatic;
+import static org.powermock.api.mockito.PowerMockito.when;
 
 @PrepareForTest({OAuth2Util.class, OAuthServerConfiguration.class, RequestObjectValidatorImpl.class, KeyStoreManager.class})
 public class RequestObjectValidatorImplTest extends PowerMockTestCase {
@@ -90,21 +92,21 @@ public class RequestObjectValidatorImplTest extends PowerMockTestCase {
         when(OAuthServerConfiguration.getInstance()).thenReturn(oauthServerConfigurationMock);
 
         mockStatic(OAuth2Util.class);
-        when(OAuth2Util.isJSON(requestObject)).thenReturn(false);
+        when(OAuth2Util.isValidJson(requestObject)).thenReturn(false);
 
         mockStatic(RequestObjectValidatorImpl.class);
         PowerMockito.spy(RequestObjectValidatorImpl.class);
         Path clientStorePath = Paths.get(System.getProperty(CarbonBaseConstants.CARBON_HOME), "repository", "resources",
                 "security", "client-truststore.jks");
         Path configPath = Paths.get(System.getProperty(CarbonBaseConstants.CARBON_HOME), "repository", "conf",
-                "identity", "Endpointconfig.properties");
+                "identity", "EndpointConfig.properties");
 
         PowerMockito.doReturn(configPath.toString()).when(RequestObjectValidatorImpl.class, "buildFilePath",
                 "./repository/conf/identity/EndpointConfig.properties");
         PowerMockito.doReturn(clientStorePath.toString()).when(RequestObjectValidatorImpl.class, "buildFilePath",
                 "./repository/resources/security/client-truststore.jks");
         requestObjectValidator.validateRequestObject(requestObject, oAuth2Parameters);
-        Assert.assertNotNull(requestObjectValidator.getPayload(), "Signature validation failed.");
+        Assert.assertNotNull(requestObjectValidator.getPayload(),"Payload should not a null value.");
     }
 
     @Test(expectedExceptions = RequestObjectException.class)
@@ -129,20 +131,20 @@ public class RequestObjectValidatorImplTest extends PowerMockTestCase {
         OAuthServerConfiguration oauthServerConfigurationMock = mock(OAuthServerConfiguration.class);
         rsaPrivateKey = Mockito.mock(RSAPrivateKey.class);
         PrivateKey privateKey = mock(PrivateKey.class);
+
         KeyStoreManager keyStoreManagerMock = mock(KeyStoreManager.class);
         when(keyStoreManagerMock.getDefaultPrivateKey()).thenReturn(privateKey);
+
         mockStatic(KeyStoreManager.class);
         when(KeyStoreManager.getInstance(-1234)).thenReturn(keyStoreManagerMock);
-        mockStatic(RequestObjectValidatorImpl.class);
-        when((RequestObjectValidatorImpl.getPrivateKey(anyString(), anyInt()))).thenReturn(rsaPrivateKey);
 
         mockStatic(OAuthServerConfiguration.class);
         when(OAuthServerConfiguration.getInstance()).thenReturn(oauthServerConfigurationMock);
 
         mockStatic(OAuth2Util.class);
-        when(OAuth2Util.isJSON(requestObject)).thenReturn(false);
+        when(OAuth2Util.isValidJson(requestObject)).thenReturn(false);
         when(OAuth2Util.getTenantId("carbon.super")).thenReturn(-1234);
-
+        when((OAuth2Util.getPrivateKey(anyString(), anyInt()))).thenReturn(rsaPrivateKey);
 
         requestObjectValidator.validateRequestObject(requestObject, oAuth2Parameters);
         Assert.assertNotNull(requestObjectValidator.getPayload(), "Failed to decrypt the request object.");

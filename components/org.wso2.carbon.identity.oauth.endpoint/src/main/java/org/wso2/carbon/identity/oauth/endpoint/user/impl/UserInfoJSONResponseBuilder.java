@@ -54,9 +54,9 @@ import java.util.Iterator;
  */
 public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
     private static final Log log = LogFactory.getLog(UserInfoJSONResponseBuilder.class);
-    //To store the list of claims which have marked as essential with claims parameter
-    private ArrayList<String> essentialClaimsforClaimParam = new ArrayList<>();
-    //To store the list of claims which have marked as essential with request parameter
+    // To store the list of claims which have marked as essential with claims parameter.
+    private List<String> essentialClaimsforClaimParam = new ArrayList<>();
+    // To store the list of claims which have marked as essential with request parameter.
     private List<String> essentialClaimsforRequestParam = new ArrayList<>();
     private static final String UPDATED_AT = "updated_at";
     private static final String PHONE_NUMBER_VERIFIED = "phone_number_verified";
@@ -194,7 +194,7 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
         return cacheEntry.getUserAttributes();
     }
 
-    private ArrayList<String> getEssentialClaims(String essentialClaimsObject) {
+    private List<String> getEssentialClaims(String essentialClaimsObject) {
         JSONObject jsonObjectClaims = new JSONObject(essentialClaimsObject);
         ArrayList essentailClaimslist = new ArrayList();
         if ((jsonObjectClaims != null) && jsonObjectClaims.toString().contains("userinfo")) {

@@ -570,8 +570,8 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
     private Map<String, Object> getEssentialClaims(String[] requestedScopes, String tenantDomain,
                                                    Map<String, Object> claims, RequestObject requestObject) {
         Resource resource = null;
-        String requestedScopeClaims = null;
-        String[] arrRequestedScopeClaims = null;
+        String requestedScopeClaims;
+        String[] arrRequestedScopeClaims;
         Map<String, Object> returnClaims = new HashMap<>();
         Map<String, Object> claimsforAddressScope = new HashMap<>();
         try {

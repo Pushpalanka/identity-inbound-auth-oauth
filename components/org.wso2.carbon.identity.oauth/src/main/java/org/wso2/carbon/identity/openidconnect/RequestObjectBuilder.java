@@ -19,6 +19,7 @@ package org.wso2.carbon.identity.openidconnect;
 
 import org.wso2.carbon.identity.oauth2.RequestObjectException;
 import org.wso2.carbon.identity.oauth2.model.OAuth2Parameters;
+import org.wso2.carbon.identity.openidconnect.model.RequestObject;
 
 /**
  * This interface is used to build request object parameter value which comes with the OIDC authorization request as an optional
@@ -29,7 +30,7 @@ public interface RequestObjectBuilder {
     /**
      * To build the request object
      */
-    public void buildRequestObject(String requestObject, OAuth2Parameters oAuth2Parameters)
-            throws RequestObjectException;
+    public void buildRequestObject(String requestObject, OAuth2Parameters oAuth2Parameters, RequestObject
+            requestObjectInstance) throws RequestObjectException;
 
 }

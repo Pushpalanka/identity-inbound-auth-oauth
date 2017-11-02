@@ -133,6 +133,7 @@ public class RequestParamRequestObjectBuilderTest extends PowerMockTestCase {
     public void buildRequestObjectTest(String requestObject) throws RequestObjectException {
 
         RequestObjectBuilder requestObjectBuilder = new RequestParamRequestObjectBuilder();
+        RequestObject requestObjectInstance = new RequestObject();
         OAuth2Parameters oAuth2Parameters = new OAuth2Parameters();
         oAuth2Parameters.setTenantDomain("carbon.super");
 
@@ -143,13 +144,13 @@ public class RequestParamRequestObjectBuilderTest extends PowerMockTestCase {
         when(OAuthServerConfiguration.getInstance()).thenReturn(oauthServerConfigurationMock);
 
         mockStatic(OAuth2Util.class);
-        when(OAuth2Util.isJSON(anyString())).thenReturn(true);
+        when(OAuth2Util.isValidJson(anyString())).thenReturn(true);
 
         when((oauthServerConfigurationMock.getRequestObjectValidator())).thenReturn(requestObjectValidatorImplMock);
         when((requestObjectValidatorImplMock.getPayload())).thenReturn(RequestJson);
-        requestObjectBuilder.buildRequestObject(requestObject, oAuth2Parameters);
-        RequestObject.getInstance().getClaimsforRequestParameter();
-        Assert.assertEquals(RequestObject.getInstance().getClaimsforRequestParameter().size(), 2);
+        requestObjectBuilder.buildRequestObject(requestObject, oAuth2Parameters, requestObjectInstance);
+        requestObjectInstance.getClaimsforRequestParameter();
+        Assert.assertEquals(requestObjectInstance.getClaimsforRequestParameter().size(), 2);
 
     }
 }

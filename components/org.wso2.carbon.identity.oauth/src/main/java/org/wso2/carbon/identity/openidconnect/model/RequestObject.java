@@ -29,40 +29,23 @@ import java.util.HashMap;
  */
 public class RequestObject {
 
-    private static String clientId;
-    private static String redirectUri;
-    private static String[] scopes;
-    private static String state;
-    private static String nonce;
-    private static String iss;
-    private static String aud;
-    private static String responseType;
-    private static String maxAge;
-    private static boolean isSignatureValid = true;
-    private static boolean isValidRequestURI = true;
-    //This iss used for extensions
+    private String clientId;
+    private String redirectUri;
+    private String[] scopes;
+    private String state;
+    private String nonce;
+    private String iss;
+    private String aud;
+    private String responseType;
+    private String maxAge;
+    private boolean isSignatureValid = true;
+    private boolean isValidRequestURI = true;
+    //This is used for extensions
     private Map<String, Object> properties = new HashMap<String, Object>();
     //To store the claims requestor and the the requested claim list. claim requestor can be either userinfo or id token
-    // or any custom member.
-    private static Map<String, List<Claim>> claimsforRequestParameter = new HashMap<>();
-    private static Log log = LogFactory.getLog(RequestObject.class);
-    private static volatile RequestObject instance = null;
-
-    /**
-     * Returns RequestObject singleton instance.
-     *
-     * @return RequestObject instance
-     */
-    public static RequestObject getInstance() {
-        if (instance == null) {
-            synchronized (RequestObject.class) {
-                if (instance == null) {
-                    instance = new RequestObject();
-                }
-            }
-        }
-        return instance;
-    }
+    // or any custom member. Sample set of values that can be exist in this map is as below.
+    //Map<"id_token", ("username, firstname, lastname")>
+    private Map<String, List<Claim>> claimsforRequestParameter = new HashMap<>();
 
     public Map<String, List<Claim>> getClaimsforRequestParameter() {
         return claimsforRequestParameter;
@@ -157,7 +140,7 @@ public class RequestObject {
     }
 
     public void setScopes(String[] scopes) {
-        RequestObject.scopes = scopes;
+        this.scopes = scopes;
     }
 
     public boolean isValidRequestURI() {
