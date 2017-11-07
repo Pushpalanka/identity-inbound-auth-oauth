@@ -18,6 +18,8 @@
 
 package org.wso2.carbon.identity.oauth2.model;
 
+import org.wso2.carbon.identity.openidconnect.model.RequestObject;
+
 import java.io.Serializable;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -47,7 +49,26 @@ public class OAuth2Parameters implements Serializable {
     private long authTime;
     private String responseMode;
     private String essentialClaims;
+    private RequestObject requestObject;
+    private String requestUriParameterClaims;
     private String displayName;
+
+    public RequestObject getRequestObject() {
+        return requestObject;
+    }
+
+    public void setRequestObject(RequestObject requestObject) {
+        this.requestObject = requestObject;
+    }
+
+    public String getRequestUriParameterClaims() {
+        return requestUriParameterClaims;
+    }
+
+    public void setRequestUriParameterClaims(String requestUriParameterClaims) {
+        this.requestUriParameterClaims = requestUriParameterClaims;
+    }
+
     public String getEssentialClaims() {
         return essentialClaims;
     }

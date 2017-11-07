@@ -482,7 +482,13 @@ public class TokenResponseTypeHandler extends AbstractResponseTypeHandler {
         if (StringUtils.isNotBlank(authorizeReqDTO.getEssentialClaims())) {
             authorizationGrantCacheEntry.setEssentialClaims(authorizeReqDTO.getEssentialClaims());
         }
+        if (authorizeReqDTO.getRequestObject() != null) {
+            authorizationGrantCacheEntry.setRequestObject(authorizeReqDTO.getRequestObject());
+        }
 
+        if (StringUtils.isNotBlank(authorizeReqDTO.getRequestUriParamClaims())) {
+            authorizationGrantCacheEntry.setRequestUriParameterClaims(authorizeReqDTO.getRequestUriParamClaims());
+        }
         String sub = userAttributes.get(OAuth2Util.SUB);
 
         AccessTokenDO accessTokenDO = (AccessTokenDO) msgCtx.getProperty(OAuth2Util.ACCESS_TOKEN_DO);

@@ -32,6 +32,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.common.message.types.ResponseType;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.wso2.carbon.base.CarbonBaseConstants;
 import org.wso2.carbon.core.util.KeyStoreManager;
@@ -61,6 +62,7 @@ import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.AccessTokenDO;
 import org.wso2.carbon.identity.oauth2.model.ClientCredentialDO;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
+import org.wso2.carbon.identity.openidconnect.model.Claim;
 import org.wso2.carbon.registry.core.Registry;
 import org.wso2.carbon.registry.core.Resource;
 import org.wso2.carbon.registry.core.exceptions.RegistryException;
@@ -79,6 +81,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
+import java.security.Key;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPublicKey;
@@ -94,6 +97,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.xml.namespace.QName;
@@ -111,6 +115,7 @@ public class OAuth2Util {
     public static final String ACCESS_TOKEN_DO = "AccessTokenDo";
     public static final String OAUTH2_VALIDATION_MESSAGE_CONTEXT = "OAuth2TokenValidationMessageContext";
     private static final String OIDC_SCOPE_VALIDATOR_CLASS = "org.wso2.carbon.identity.oauth2.validators.OIDCScopeValidator";
+    private static final String ESSENTAIL = "essential";
 
     private static final String ALGORITHM_NONE = "NONE";
     /*
@@ -198,6 +203,7 @@ public class OAuth2Util {
     private static ThreadLocal<OAuthAuthzReqMessageContext> authzRequestContext = new ThreadLocal<OAuthAuthzReqMessageContext>();
     //Precompile PKCE Regex pattern for performance improvement
     private static Pattern pkceCodeVerifierPattern = Pattern.compile("[\\w\\-\\._~]+");
+    private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
 
     private OAuth2Util(){
 
@@ -208,10 +214,10 @@ public class OAuth2Util {
      * @return
      */
     public static OAuthAuthzReqMessageContext getAuthzRequestContext() {
-	if (log.isDebugEnabled()) {
-	    log.debug("Retreived OAuthAuthzReqMessageContext from threadlocal");
-	}
-	return authzRequestContext.get();
+        if (log.isDebugEnabled()) {
+            log.debug("Retreived OAuthAuthzReqMessageContext from threadlocal");
+        }
+        return authzRequestContext.get();
     }
 
     /**
@@ -219,20 +225,20 @@ public class OAuth2Util {
      * @param context
      */
     public static void setAuthzRequestContext(OAuthAuthzReqMessageContext context) {
-	authzRequestContext.set(context);
-	if (log.isDebugEnabled()) {
-	    log.debug("Added OAuthAuthzReqMessageContext to threadlocal");
-	}
+        authzRequestContext.set(context);
+        if (log.isDebugEnabled()) {
+            log.debug("Added OAuthAuthzReqMessageContext to threadlocal");
+        }
     }
 
     /**
      *
      */
     public static void clearAuthzRequestContext() {
-	authzRequestContext.remove();
-	if (log.isDebugEnabled()) {
-	    log.debug("Cleared OAuthAuthzReqMessageContext");
-	}
+        authzRequestContext.remove();
+        if (log.isDebugEnabled()) {
+            log.debug("Cleared OAuthAuthzReqMessageContext");
+        }
     }
 
     /**
@@ -240,10 +246,10 @@ public class OAuth2Util {
      * @return
      */
     public static OAuthTokenReqMessageContext getTokenRequestContext() {
-	if (log.isDebugEnabled()) {
-	    log.debug("Retreived OAuthTokenReqMessageContext from threadlocal");
-	}
-	return tokenRequestContext.get();
+        if (log.isDebugEnabled()) {
+            log.debug("Retreived OAuthTokenReqMessageContext from threadlocal");
+        }
+        return tokenRequestContext.get();
     }
 
     /**
@@ -251,20 +257,20 @@ public class OAuth2Util {
      * @param context
      */
     public static void setTokenRequestContext(OAuthTokenReqMessageContext context) {
-	tokenRequestContext.set(context);
-	if (log.isDebugEnabled()) {
-	    log.debug("Added OAuthTokenReqMessageContext to threadlocal");
-	}
+        tokenRequestContext.set(context);
+        if (log.isDebugEnabled()) {
+            log.debug("Added OAuthTokenReqMessageContext to threadlocal");
+        }
     }
 
     /**
      *
      */
     public static void clearTokenRequestContext() {
-	tokenRequestContext.remove();
-	if (log.isDebugEnabled()) {
-	    log.debug("Cleared OAuthTokenReqMessageContext");
-	}
+        tokenRequestContext.remove();
+        if (log.isDebugEnabled()) {
+            log.debug("Cleared OAuthTokenReqMessageContext");
+        }
     }
 
     /**
@@ -475,7 +481,7 @@ public class OAuth2Util {
         long currentTime = System.currentTimeMillis();
 
         //check the validity of cached OAuth2AccessToken Response
-        long accessTokenValidityMillis = calculateValidityInMillis(issuedTime,validityPeriodMillis);
+        long accessTokenValidityMillis = calculateValidityInMillis(issuedTime, validityPeriodMillis);
 
         if (accessTokenValidityMillis > 1000) {
             long refreshValidityPeriodMillis = OAuthServerConfiguration.getInstance()
@@ -1306,7 +1312,7 @@ public class OAuth2Util {
         } catch (RegistryException e) {
             log.error("Error while getting data from the registry.", e);
         } catch (IdentityException e) {
-            log.error("Error while getting the tenant domain from tenant id : " + tenantId , e);
+            log.error("Error while getting the tenant domain from tenant id : " + tenantId, e);
         }
         return spTokenTimeObject;
     }
@@ -1443,6 +1449,48 @@ public class OAuth2Util {
         throw new IdentityOAuth2Exception("Unsupported Signature Algorithm in identity.xml");
     }
 
+    /**
+     * Validates the json provided.
+     *
+     * @param redirectURL
+     * @return true if a valid json
+     */
+    public static boolean isValidJson(String redirectURL) {
+        try {
+            new JSONObject(redirectURL);
+        } catch (JSONException ex) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * This method returns essential:true claims list from the request parameter of OIDC authorization request
+     *
+     * @param claimRequestor claimrequestor is either id_token or  userinfo
+     * @param requestedClaimsFromRequestParam  claims defined in the value of the request parameter
+     * @return the claim list which have attribute vale essentail :true
+     */
+    public static List<String> essentialClaimsFromRequestParam(String claimRequestor, Map<String, List<Claim>>
+            requestedClaimsFromRequestParam) {
+        String attributeValue = null;
+        List<String> essentialClaimsfromRequestParam = new ArrayList<>();
+        List<Claim> claimsforClaimRequestor = requestedClaimsFromRequestParam.get(claimRequestor);
+        for (Claim claimforClaimRequestor : claimsforClaimRequestor) {
+            String claim = claimforClaimRequestor.getName();
+            Map<String, String> attributesMap = claimforClaimRequestor.getClaimAttributesMap();
+            if (attributesMap != null) {
+                for (Map.Entry<String, String> attributesEntryMap : attributesMap.entrySet()) {
+                        attributeValue = attributesMap.get(attributesEntryMap.getKey());
+
+                    if (ESSENTAIL.equals(attributesEntryMap.getKey()) && Boolean.parseBoolean(attributeValue)) {
+                        essentialClaimsfromRequestParam.add(claim);
+                    }
+                }
+            }
+        }
+        return essentialClaimsfromRequestParam;
+    }
 
     /**
      * Validate Id token signature.
@@ -1492,4 +1540,54 @@ public class OAuth2Util {
         }
     }
 
+    /**
+     * Returns the private key of the keystore manager.
+     * @param tenantDomain tenant domain
+     * @param tenantId tenant id
+     * @return private key
+     * @throws IdentityOAuth2Exception
+     */
+    public static Key getPrivateKey(String tenantDomain, int tenantId) throws IdentityOAuth2Exception {
+        Key privateKey;
+        if (!(privateKeys.containsKey(tenantId))) {
+
+            try {
+                IdentityTenantUtil.initializeRegistry(tenantId, tenantDomain);
+            } catch (IdentityException e) {
+                throw new IdentityOAuth2Exception("Error occurred while loading registry for tenant " + tenantDomain,
+                        e);
+            }
+            // Get tenant's key store manager
+            KeyStoreManager tenantKSM = KeyStoreManager.getInstance(tenantId);
+
+            privateKey = derivePrivateKey(tenantDomain, tenantKSM);
+            // PrivateKey will not be null always
+            privateKeys.put(tenantId, privateKey);
+        } else {
+            // PrivateKey will not be null because containsKey() true says given key is exist and ConcurrentHashMap
+            // does not allow to store null values.
+            privateKey = privateKeys.get(tenantId);
+        }
+        return privateKey;
+    }
+
+    private static Key derivePrivateKey(String tenantDomain, KeyStoreManager tenantKSM) throws IdentityOAuth2Exception {
+        Key privateKey;
+        if (!tenantDomain.equals(org.wso2.carbon.base.MultitenantConstants.SUPER_TENANT_DOMAIN_NAME)) {
+            // Derive key store name
+            String ksName = tenantDomain.trim().replace(".", "-");
+            String jksName = ksName + ".jks";
+            // Obtain private key
+            privateKey = tenantKSM.getPrivateKey(jksName, tenantDomain);
+
+        } else {
+            try {
+                privateKey = tenantKSM.getDefaultPrivateKey();
+            } catch (Exception e) {
+                throw new IdentityOAuth2Exception("Error while obtaining private key for super tenant", e);
+            }
+        }
+        return privateKey;
+    }
 }
+

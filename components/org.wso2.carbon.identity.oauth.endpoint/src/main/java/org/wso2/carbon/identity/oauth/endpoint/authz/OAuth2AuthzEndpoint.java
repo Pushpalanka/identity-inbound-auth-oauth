@@ -20,6 +20,7 @@ package org.wso2.carbon.identity.oauth.endpoint.authz;
 import com.nimbusds.jwt.SignedJWT;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -64,6 +65,7 @@ import org.wso2.carbon.identity.oauth.endpoint.OAuthRequestWrapper;
 import org.wso2.carbon.identity.oauth.endpoint.util.EndpointUtil;
 import org.wso2.carbon.identity.oauth.endpoint.util.OpenIDConnectUserRPStore;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
+import org.wso2.carbon.identity.oauth2.RequestObjectException;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AuthorizeReqDTO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AuthorizeRespDTO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2ClientValidationResponseDTO;
@@ -72,6 +74,8 @@ import org.wso2.carbon.identity.oauth2.model.OAuth2Parameters;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.identity.oidc.session.OIDCSessionState;
 import org.wso2.carbon.identity.oidc.session.util.OIDCSessionManagementUtil;
+import org.wso2.carbon.identity.openidconnect.OIDCRequestObjectFactory;
+import org.wso2.carbon.identity.openidconnect.model.RequestObject;
 import org.wso2.carbon.registry.core.utils.UUIDGenerator;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
@@ -115,7 +119,10 @@ public class OAuth2AuthzEndpoint {
     private static final String RESPONSE_MODE_FORM_POST = "form_post";
     private static final String RESPONSE_MODE = "response_mode";
     private static final String AUTHENTICATION_RESULT_ERROR_PARAM_KEY = "AuthenticationError";
+    private static final String REQUEST = "request";
+    private static final String REQUEST_URI = "request_uri";
     private static final String DISPLAY_NAME = "DisplayName";
+
     @GET
     @Path("/")
     @Consumes("application/x-www-form-urlencoded")
@@ -700,6 +707,14 @@ public class OAuth2AuthzEndpoint {
         authorizationGrantCacheEntry.setPkceCodeChallengeMethod(pkceCodeChallengeMethod);
         authorizationGrantCacheEntry.setEssentialClaims(
                 sessionDataCacheEntry.getoAuth2Parameters().getEssentialClaims());
+        if (sessionDataCacheEntry.getoAuth2Parameters().getRequestObject() != null) {
+            authorizationGrantCacheEntry.setRequestObject(sessionDataCacheEntry.getoAuth2Parameters().
+                    getRequestObject());
+        }
+        if (StringUtils.isNotEmpty(sessionDataCacheEntry.getoAuth2Parameters().getRequestUriParameterClaims())) {
+            authorizationGrantCacheEntry.setRequestUriParameterClaims(sessionDataCacheEntry.getoAuth2Parameters().
+                    getRequestUriParameterClaims());
+        }
         authorizationGrantCacheEntry.setAuthTime(sessionDataCacheEntry.getAuthTime());
         AuthorizationGrantCache.getInstance().addToCacheByCode(authorizationGrantCacheKey, authorizationGrantCacheEntry);
     }
@@ -845,6 +860,12 @@ public class OAuth2AuthzEndpoint {
         if (StringUtils.isNotBlank(oauthRequest.getParam("claims"))) {
             params.setEssentialClaims(oauthRequest.getParam("claims"));
         }
+        try {
+            handleOIDCRequestObject(oauthRequest, params);
+        } catch (RequestObjectException e) {
+            // All the error logs are specified at the time when throw the exception.
+            return EndpointUtil.getErrorPageURL(e.getErrorCode(), e.getErrorMessage(), null);
+        }
         String prompt = oauthRequest.getParam(OAuthConstants.OAuth20Params.PROMPT);
         params.setPrompt(prompt);
 
@@ -949,6 +970,94 @@ public class OAuth2AuthzEndpoint {
                 log.debug("Error while retrieving the login page url.", e);
             }
             throw new OAuthSystemException("Error when encoding login page URL");
+        }
+    }
+
+    private void handleOIDCRequestObject(OAuthAuthzRequest oauthRequest, OAuth2Parameters parameters)
+            throws RequestObjectException {
+        validateRequestObject(oauthRequest);
+        if (isRequestUri(oauthRequest.getParam(REQUEST_URI))) {
+            handleRequestObject(oauthRequest, parameters, oauthRequest.getParam(REQUEST_URI));
+        } else if (isRequestParameter(oauthRequest.getParam(REQUEST))) {
+            handleRequestObject(oauthRequest, parameters, oauthRequest.getParam(REQUEST));
+        }
+    }
+
+    // To check whether the parameter is 'request_uri'.
+    private boolean isRequestUri(String param) {
+        return StringUtils.isNotBlank(param);
+    }
+
+    // To check whether the parameter is 'request'.
+    private boolean isRequestParameter(String param) {
+        return StringUtils.isNotBlank(param);
+    }
+
+    private void validateRequestObject(OAuthAuthzRequest oauthRequest) throws RequestObjectException {
+        // With in the same request it can not be used both request parameter and request_uri parameter.
+        if (StringUtils.isNotEmpty(oauthRequest.getParam(REQUEST)) && StringUtils.isNotEmpty(oauthRequest.getParam
+                (REQUEST_URI))) {
+            throw new RequestObjectException(RequestObjectException.ERROR_CODE_INVALID_REQUEST, "Both request and " +
+                    "request_uri parameters can not be associated with the same authorization request.");
+        }
+    }
+
+    private void handleRequestObject(OAuthAuthzRequest oauthRequest, OAuth2Parameters parameters,
+                                     String requestParameterValue) throws RequestObjectException {
+        if (StringUtils.isNotBlank(requestParameterValue)) {
+            RequestObject requestObject = getRequestObject(oauthRequest, parameters);
+            if (requestObject == null) {
+                throw new RequestObjectException(OAuth2ErrorCodes.INVALID_REQUEST, "Can not build the request object as " +
+                        "request object instance is null.");
+            }
+            validateSignatureAndContent(parameters, requestObject);
+            /**
+             * When the request parameter is used, the OpenID Connect request parameter values contained in the JWT supersede
+             * those passed using the OAuth 2.0 request syntax
+             */
+            overrideAuthzParameters(parameters, oauthRequest.getParam(REQUEST), oauthRequest.getParam(REQUEST_URI),
+                    requestObject);
+        }
+    }
+
+    private void validateSignatureAndContent(OAuth2Parameters params, RequestObject requestObject) throws
+            RequestObjectException {
+        if (requestObject.isSignatureValid()) {
+            params.setRequestObject(requestObject);
+            if (log.isDebugEnabled()) {
+                log.debug("The request Object is valid. Hence storing the request object value in oauth params.");
+            }
+        } else {
+            if (log.isDebugEnabled()) {
+                log.debug("The request signature validation failed as the json is invalid.");
+            }
+            throw new RequestObjectException(OAuth2ErrorCodes.INVALID_REQUEST, "Request object signature " +
+                    "validation failed.");
+        }
+    }
+
+    private RequestObject getRequestObject(OAuthAuthzRequest oauthRequest, OAuth2Parameters parameters)
+            throws RequestObjectException {
+        RequestObject requestObject = new RequestObject();
+        OIDCRequestObjectFactory.buildRequestObject(oauthRequest, parameters, requestObject);
+        return requestObject;
+    }
+
+    private void overrideAuthzParameters(OAuth2Parameters params, String requestParameterValue,
+                                         String requestURIParameterValue, RequestObject requestObject) {
+        if (StringUtils.isNotBlank(requestParameterValue) || StringUtils.isNotBlank(requestURIParameterValue)) {
+            if (StringUtils.isNotBlank(requestObject.getRedirectUri())) {
+                params.setRedirectURI(requestObject.getRedirectUri());
+            }
+            if (StringUtils.isNotBlank(requestObject.getNonce())) {
+                params.setNonce(requestObject.getNonce());
+            }
+            if (StringUtils.isNotBlank(requestObject.getState())) {
+                params.setState(requestObject.getState());
+            }
+            if (ArrayUtils.isNotEmpty(requestObject.getScopes())) {
+                params.setScopes(new HashSet<>(Arrays.asList(requestObject.getScopes())));
+            }
         }
     }
 
@@ -1126,6 +1235,8 @@ public class OAuth2AuthzEndpoint {
         authzReqDTO.setTenantDomain(oauth2Params.getTenantDomain());
         authzReqDTO.setAuthTime(oauth2Params.getAuthTime());
         authzReqDTO.setEssentialClaims(oauth2Params.getEssentialClaims());
+        authzReqDTO.setRequestObject(oauth2Params.getRequestObject());
+        authzReqDTO.setRequestUriParamClaims(oauth2Params.getRequestUriParameterClaims());
         return EndpointUtil.getOAuth2Service().authorize(authzReqDTO);
     }
 

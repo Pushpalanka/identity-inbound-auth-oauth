@@ -17,6 +17,7 @@
  */
 package org.wso2.carbon.identity.oauth.endpoint.user.impl;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -41,18 +42,22 @@ import org.wso2.carbon.registry.core.exceptions.RegistryException;
 import org.wso2.carbon.registry.core.service.RegistryService;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Enumeration;
+import java.util.Arrays;
+import java.util.Iterator;
 
 /**
  *
  */
 public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
     private static final Log log = LogFactory.getLog(UserInfoJSONResponseBuilder.class);
-    private ArrayList<String> lstEssential = new ArrayList<>();
+    // To store the list of claims which have marked as essential with claims parameter.
+    private List<String> essentialClaimsforClaimParam = new ArrayList<>();
+    // To store the list of claims which have marked as essential with request parameter.
+    private List<String> essentialClaimsforRequestParam = new ArrayList<>();
     private static final String UPDATED_AT = "updated_at";
     private static final String PHONE_NUMBER_VERIFIED = "phone_number_verified";
     private static final String EMAIL_VERIFIED = "email_verified";
@@ -103,7 +108,8 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
             claims = new HashMap<String,Object>();
         }
         String[] arrRequestedScopeClaims = null;
-        for (String requestedScope : tokenResponse.getScope()) {
+        String[] requestedScopes = tokenResponse.getScope();
+        for (String requestedScope : requestedScopes) {
             if (resource != null && resource.getProperties() != null) {
                 Enumeration supporetdScopes = resource.getProperties().propertyNames();
                 while (supporetdScopes.hasMoreElements()) {
@@ -118,7 +124,8 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
                         }
                         for (Map.Entry<String, Object> entry : claims.entrySet()) {
                             String requestedClaims = entry.getKey();
-                            if (Arrays.asList(arrRequestedScopeClaims).contains(requestedClaims)) {
+                            if (Arrays.asList(arrRequestedScopeClaims).contains(requestedClaims) ||
+                                    essentialClaimsforRequestParam.contains(requestedClaims)) {
                                 returnClaims.put(entry.getKey(), claims.get(entry.getKey()));
                                 if (requestedScope.equals("address")) {
                                     if (!requestedScope.equals(ADDRESS)) {
@@ -160,8 +167,8 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
         if (!returnClaims.containsKey("sub") || StringUtils.isBlank((String) claims.get("sub"))) {
             returnClaims.put("sub", tokenResponse.getAuthorizedUser());
         }
-        if (lstEssential != null) {
-            for (String key : lstEssential) {
+        if (CollectionUtils.isNotEmpty(essentialClaimsforClaimParam)) {
+            for (String key : essentialClaimsforClaimParam) {
                 returnClaims.put(key, claims.get(key));
             }
         }
@@ -177,22 +184,24 @@ public class UserInfoJSONResponseBuilder implements UserInfoResponseBuilder {
         if (cacheEntry == null) {
             return new HashMap<ClaimMapping, String>();
         }
-
         if (StringUtils.isNotEmpty(cacheEntry.getEssentialClaims())) {
-            lstEssential = getEssentialClaims(cacheEntry.getEssentialClaims());
+            essentialClaimsforClaimParam = getEssentialClaims(cacheEntry.getEssentialClaims());
+        }
+        if (cacheEntry.getRequestObject() != null) {
+            essentialClaimsforRequestParam = OAuth2Util.essentialClaimsFromRequestParam(OAuthConstants.USERINFO,
+                    cacheEntry.getRequestObject().getClaimsforRequestParameter());
         }
         return cacheEntry.getUserAttributes();
     }
 
-    private ArrayList<String> getEssentialClaims(String essentialClaims) {
-        JSONObject jsonObjectClaims = new JSONObject(essentialClaims);
-        String key;
+    private List<String> getEssentialClaims(String essentialClaimsObject) {
+        JSONObject jsonObjectClaims = new JSONObject(essentialClaimsObject);
         ArrayList essentailClaimslist = new ArrayList();
         if ((jsonObjectClaims != null) && jsonObjectClaims.toString().contains("userinfo")) {
             JSONObject newJSON = jsonObjectClaims.getJSONObject("userinfo");
             Iterator<?> keys = newJSON.keys();
             while (keys.hasNext()) {
-                key = (String) keys.next();
+                String key = (String) keys.next();
                 String value = null;
                 if (newJSON != null) {
                     value = newJSON.get(key).toString();

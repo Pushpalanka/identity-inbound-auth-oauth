@@ -56,6 +56,9 @@ import org.wso2.carbon.identity.oauth.internal.OAuthComponentServiceHolder;
 import org.wso2.carbon.identity.oauth2.authz.OAuthAuthzReqMessageContext;
 import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
+import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.identity.openidconnect.model.Claim;
+import org.wso2.carbon.identity.openidconnect.model.RequestObject;
 import org.wso2.carbon.registry.api.RegistryException;
 import org.wso2.carbon.registry.api.Resource;
 import org.wso2.carbon.registry.core.service.RegistryService;
@@ -88,6 +91,7 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
     private static final String UPDATED_AT = "updated_at";
     private static final String PHONE_NUMBER_VERIFIED = "phone_number_verified";
     private static final String EMAIL_VERIFIED = "email_verified";
+    private static final String REQUEST_OBJECT = "requestObject";
 
     private static String userAttributeSeparator = IdentityCoreConstants.MULTI_ATTRIBUTE_SEPARATOR_DEFAULT;
 
@@ -208,7 +212,8 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
             claims = getClaimsMap(userAttributes);
         }
         String tenantDomain = requestMsgCtx.getOauth2AccessTokenReqDTO().getTenantDomain();
-        return controlClaimsFromScope(requestMsgCtx.getScope(), tenantDomain, claims);
+        return getEssentialClaims(requestMsgCtx.getScope(), tenantDomain, claims, (RequestObject) requestMsgCtx.
+                getProperty(REQUEST_OBJECT));
     }
 
     private Map<String, Object> getResponse(OAuthAuthzReqMessageContext requestMsgCtx)
@@ -233,7 +238,7 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
             claims = getClaimsMap(userAttributes);
         }
         String tenantDomain = requestMsgCtx.getAuthorizationReqDTO().getTenantDomain();
-        return controlClaimsFromScope(requestMsgCtx.getApprovedScope(), tenantDomain, claims);
+        return getEssentialClaims(requestMsgCtx.getApprovedScope(), tenantDomain, claims, requestMsgCtx.getAuthorizationReqDTO().getRequestObject());
     }
 
     /**
@@ -543,19 +548,30 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
         }
     }
 
+    private List<String> getEssentialClaims(RequestObject requestObject) {
+
+       List<String> essentialClaimsfromRequestParam;
+        Map<String, List<Claim>> requestParamClaims = requestObject.getClaimsforRequestParameter();
+        essentialClaimsfromRequestParam = OAuth2Util.essentialClaimsFromRequestParam(OAuthConstants.ID_TOKEN,
+                requestParamClaims);
+        return  essentialClaimsfromRequestParam;
+    }
+
     /**
-     * Use to control claims based on the requested scopes and defined scopes in the registry
+     * Use to control claims based on the requested scopes,defined scopes in the registry, sp requested claims
+     * and essential claims which comes with the authorization request
      *
-     * @param requestedScopes String[] requestedScopes
+     * @param requestedScopes requested Scopes
      * @param tenantDomain    String tenantDomain
      * @param claims          Object> claims
+     * @param requestObject   request Object
      * @return
      */
-    private Map<String, Object> controlClaimsFromScope(String[] requestedScopes, String tenantDomain,
-                                                       Map<String, Object> claims) {
+    private Map<String, Object> getEssentialClaims(String[] requestedScopes, String tenantDomain,
+                                                   Map<String, Object> claims, RequestObject requestObject) {
         Resource resource = null;
-        String requestedScopeClaims = null;
-        String[] arrRequestedScopeClaims = null;
+        String requestedScopeClaims;
+        String[] arrRequestedScopeClaims;
         Map<String, Object> returnClaims = new HashMap<>();
         Map<String, Object> claimsforAddressScope = new HashMap<>();
         try {
@@ -571,6 +587,7 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
         } finally {
             PrivilegedCarbonContext.endTenantFlow();
         }
+
         for (String requestedScope : requestedScopes) {
             if (resource != null && resource.getProperties() != null) {
                 Enumeration supporetdScopes = resource.getProperties().propertyNames();
@@ -586,7 +603,8 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
                         }
                         for (Map.Entry<String, Object> entry : claims.entrySet()) {
                             String requestedClaims = entry.getKey();
-                            if (Arrays.asList(arrRequestedScopeClaims).contains(requestedClaims)) {
+                            if (Arrays.asList(arrRequestedScopeClaims).contains(requestedClaims) ||
+                                    getEssentialClaims(requestObject).contains(requestedClaims)) {
                                 returnClaims.put(entry.getKey(), claims.get(entry.getKey()));
                                 if (requestedScope.equals("address")) {
                                     if (!requestedScope.equals("address")) {
