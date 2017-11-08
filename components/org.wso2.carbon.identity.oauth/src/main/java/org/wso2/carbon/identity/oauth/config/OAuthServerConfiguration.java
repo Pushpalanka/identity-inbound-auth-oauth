@@ -252,9 +252,6 @@ public class OAuthServerConfiguration {
         // read supported grant types
         parseSupportedGrantTypesConfig(oauthElem);
 
-        // Read request object builder classes
-        parseRequestObjectConfig(oauthElem);
-
         // read supported response types
         parseSupportedResponseTypesConfig(oauthElem);
 
@@ -1357,11 +1354,7 @@ public class OAuthServerConfiguration {
         }
     }
 
-    private void parseRequestObjectConfig(OMElement oauthConfigElem) {
-
-        OMElement requestObjectBuildersElem =
-                oauthConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.REQUEST_OBJECT_BUILDERS));
-
+    private void parseRequestObjectConfig(OMElement requestObjectBuildersElem) {
         if (requestObjectBuildersElem != null) {
             Iterator<OMElement> iterator = requestObjectBuildersElem
                     .getChildrenWithName(getQNameWithIdentityNS(ConfigElements.REQUEST_OBJECT_BUILDER));
@@ -1696,6 +1689,8 @@ public class OAuthServerConfiguration {
                 oauthConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.OPENID_CONNECT));
 
         if (openIDConnectConfigElem != null) {
+                parseRequestObjectConfig(oauthConfigElem);
+
             if (openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.OPENID_CONNECT_IDTOKEN_BUILDER)) != null) {
                 openIDConnectIDTokenBuilderClassName =
                         openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.OPENID_CONNECT_IDTOKEN_BUILDER))
