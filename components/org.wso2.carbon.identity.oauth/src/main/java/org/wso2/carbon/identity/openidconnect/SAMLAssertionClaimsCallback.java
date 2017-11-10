@@ -550,11 +550,13 @@ public class SAMLAssertionClaimsCallback implements CustomClaimsCallbackHandler 
 
     private List<String> getEssentialClaims(RequestObject requestObject) {
 
-       List<String> essentialClaimsfromRequestParam;
-        Map<String, List<Claim>> requestParamClaims = requestObject.getClaimsforRequestParameter();
-        essentialClaimsfromRequestParam = OAuth2Util.essentialClaimsFromRequestParam(OAuthConstants.ID_TOKEN,
-                requestParamClaims);
-        return  essentialClaimsfromRequestParam;
+        List<String> essentialClaimsfromRequestParam = new ArrayList<>();
+        if (requestObject != null) {
+            Map<String, List<Claim>> requestParamClaims = requestObject.getClaimsforRequestParameter();
+            essentialClaimsfromRequestParam = OAuth2Util.essentialClaimsFromRequestParam(OAuthConstants.ID_TOKEN,
+                    requestParamClaims);
+        }
+        return essentialClaimsfromRequestParam;
     }
 
     /**
