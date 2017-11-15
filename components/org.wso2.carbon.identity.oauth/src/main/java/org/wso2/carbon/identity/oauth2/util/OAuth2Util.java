@@ -37,6 +37,10 @@ import org.json.JSONObject;
 import org.wso2.carbon.base.CarbonBaseConstants;
 import org.wso2.carbon.core.util.KeyStoreManager;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
+import org.wso2.carbon.identity.application.common.model.InboundAuthenticationRequestConfig;
+import org.wso2.carbon.identity.application.common.model.Property;
+import org.wso2.carbon.identity.application.common.model.ServiceProvider;
+import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.base.IdentityConstants;
 import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.util.IdentityIOStreamUtils;
@@ -205,12 +209,11 @@ public class OAuth2Util {
     private static Pattern pkceCodeVerifierPattern = Pattern.compile("[\\w\\-\\._~]+");
     private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
 
-    private OAuth2Util(){
+    private OAuth2Util() {
 
     }
 
     /**
-     *
      * @return
      */
     public static OAuthAuthzReqMessageContext getAuthzRequestContext() {
@@ -221,7 +224,6 @@ public class OAuth2Util {
     }
 
     /**
-     *
      * @param context
      */
     public static void setAuthzRequestContext(OAuthAuthzReqMessageContext context) {
@@ -242,7 +244,6 @@ public class OAuth2Util {
     }
 
     /**
-     *
      * @return
      */
     public static OAuthTokenReqMessageContext getTokenRequestContext() {
@@ -253,7 +254,6 @@ public class OAuth2Util {
     }
 
     /**
-     *
      * @param context
      */
     public static void setTokenRequestContext(OAuthTokenReqMessageContext context) {
@@ -721,8 +721,8 @@ public class OAuth2Util {
 
         long accessTokenValidityPeriodMillis = accessTokenDO.getValidityPeriodInMillis();
 
-        if(accessTokenValidityPeriodMillis < 0 &&
-                IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)){
+        if (accessTokenValidityPeriodMillis < 0 &&
+                IdentityUtil.isTokenLoggable(IdentityConstants.IdentityTokens.ACCESS_TOKEN)) {
             log.debug("Access Token : " + accessTokenDO.getAccessToken() + " has infinite lifetime");
             return -1;
         }
@@ -757,7 +757,7 @@ public class OAuth2Util {
 
         long refreshTokenIssuedTime = accessTokenDO.getRefreshTokenIssuedTime().getTime();
         long refreshTokenValidity = calculateValidityInMillis(refreshTokenIssuedTime, refreshTokenValidityPeriodMillis);
-        if(refreshTokenValidity > 1000){
+        if (refreshTokenValidity > 1000) {
             return refreshTokenValidity;
         }
         return 0;
@@ -765,7 +765,7 @@ public class OAuth2Util {
 
     public static long getAccessTokenExpireMillis(AccessTokenDO accessTokenDO) {
 
-        if(accessTokenDO == null){
+        if (accessTokenDO == null) {
             throw new IllegalArgumentException("accessTokenDO is " + "\'NULL\'");
         }
         long validityPeriodMillis = accessTokenDO.getValidityPeriodInMillis();
@@ -863,7 +863,7 @@ public class OAuth2Util {
 
         public static String getOAuth1RequestTokenUrl() {
             String oauth1RequestTokenUrl = OAuthServerConfiguration.getInstance().getOAuth1RequestTokenUrl();
-            if(StringUtils.isBlank(oauth1RequestTokenUrl)){
+            if (StringUtils.isBlank(oauth1RequestTokenUrl)) {
                 oauth1RequestTokenUrl = IdentityUtil.getServerURL("oauth/request-token", true, true);
             }
             return oauth1RequestTokenUrl;
@@ -871,7 +871,7 @@ public class OAuth2Util {
 
         public static String getOAuth1AuthorizeUrl() {
             String oauth1AuthorizeUrl = OAuthServerConfiguration.getInstance().getOAuth1AuthorizeUrl();
-            if(StringUtils.isBlank(oauth1AuthorizeUrl)){
+            if (StringUtils.isBlank(oauth1AuthorizeUrl)) {
                 oauth1AuthorizeUrl = IdentityUtil.getServerURL("oauth/authorize-url", true, true);
             }
             return oauth1AuthorizeUrl;
@@ -879,7 +879,7 @@ public class OAuth2Util {
 
         public static String getOAuth1AccessTokenUrl() {
             String oauth1AccessTokenUrl = OAuthServerConfiguration.getInstance().getOAuth1AccessTokenUrl();
-            if(StringUtils.isBlank(oauth1AccessTokenUrl)){
+            if (StringUtils.isBlank(oauth1AccessTokenUrl)) {
                 oauth1AccessTokenUrl = IdentityUtil.getServerURL("oauth/access-token", true, true);
             }
             return oauth1AccessTokenUrl;
@@ -887,7 +887,7 @@ public class OAuth2Util {
 
         public static String getOAuth2AuthzEPUrl() {
             String oauth2AuthzEPUrl = OAuthServerConfiguration.getInstance().getOAuth2AuthzEPUrl();
-            if(StringUtils.isBlank(oauth2AuthzEPUrl)){
+            if (StringUtils.isBlank(oauth2AuthzEPUrl)) {
                 oauth2AuthzEPUrl = IdentityUtil.getServerURL("oauth2/authorize", true, false);
             }
             return oauth2AuthzEPUrl;
@@ -895,7 +895,7 @@ public class OAuth2Util {
 
         public static String getOAuth2TokenEPUrl() {
             String oauth2TokenEPUrl = OAuthServerConfiguration.getInstance().getOAuth2TokenEPUrl();
-            if(StringUtils.isBlank(oauth2TokenEPUrl)){
+            if (StringUtils.isBlank(oauth2TokenEPUrl)) {
                 oauth2TokenEPUrl = IdentityUtil.getServerURL("oauth2/token", true, false);
             }
             return oauth2TokenEPUrl;
@@ -947,7 +947,7 @@ public class OAuth2Util {
 
         public static String getOAuth2UserInfoEPUrl() {
             String oauth2UserInfoEPUrl = OAuthServerConfiguration.getInstance().getOauth2UserInfoEPUrl();
-            if(StringUtils.isBlank(oauth2UserInfoEPUrl)){
+            if (StringUtils.isBlank(oauth2UserInfoEPUrl)) {
                 oauth2UserInfoEPUrl = IdentityUtil.getServerURL("oauth2/userinfo", true, false);
             }
             return oauth2UserInfoEPUrl;
@@ -955,7 +955,7 @@ public class OAuth2Util {
 
         public static String getOIDCConsentPageUrl() {
             String OIDCConsentPageUrl = OAuthServerConfiguration.getInstance().getOIDCConsentPageUrl();
-            if(StringUtils.isBlank(OIDCConsentPageUrl)){
+            if (StringUtils.isBlank(OIDCConsentPageUrl)) {
                 OIDCConsentPageUrl = IdentityUtil.getServerURL("/authenticationendpoint/oauth2_consent.do", false,
                         false);
             }
@@ -964,7 +964,7 @@ public class OAuth2Util {
 
         public static String getOAuth2ConsentPageUrl() {
             String oAuth2ConsentPageUrl = OAuthServerConfiguration.getInstance().getOauth2ConsentPageUrl();
-            if(StringUtils.isBlank(oAuth2ConsentPageUrl)){
+            if (StringUtils.isBlank(oAuth2ConsentPageUrl)) {
                 oAuth2ConsentPageUrl = IdentityUtil.getServerURL("/authenticationendpoint/oauth2_authz.do", false,
                         false);
             }
@@ -973,7 +973,7 @@ public class OAuth2Util {
 
         public static String getOAuth2ErrorPageUrl() {
             String oAuth2ErrorPageUrl = OAuthServerConfiguration.getInstance().getOauth2ErrorPageUrl();
-            if(StringUtils.isBlank(oAuth2ErrorPageUrl)){
+            if (StringUtils.isBlank(oAuth2ErrorPageUrl)) {
                 oAuth2ErrorPageUrl = IdentityUtil.getServerURL("/authenticationendpoint/oauth2_error.do", false, false);
             }
             return oAuth2ErrorPageUrl;
@@ -992,7 +992,7 @@ public class OAuth2Util {
     }
 
     public static boolean isOIDCAuthzRequest(String[] scope) {
-        for(String openidscope : scope) {
+        for (String openidscope : scope) {
             if (openidscope.equals(OAuthConstants.Scope.OPENID)) {
                 return true;
             }
@@ -1002,12 +1002,13 @@ public class OAuth2Util {
 
     /**
      * Verifies if the PKCE code verifier is upto specification as per RFC 7636
+     *
      * @param codeVerifier PKCE Code Verifier sent with the token request
      * @return
      */
     public static boolean validatePKCECodeVerifier(String codeVerifier) {
         Matcher pkceCodeVerifierMatcher = pkceCodeVerifierPattern.matcher(codeVerifier);
-        if(!pkceCodeVerifierMatcher.matches() || (codeVerifier.length() < 43 || codeVerifier.length() > 128)) {
+        if (!pkceCodeVerifierMatcher.matches() || (codeVerifier.length() < 43 || codeVerifier.length() > 128)) {
             return false;
         }
         return true;
@@ -1015,45 +1016,46 @@ public class OAuth2Util {
 
     /**
      * Verifies if the codeChallenge is upto specification as per RFC 7636
+     *
      * @param codeChallenge
      * @param codeChallengeMethod
      * @return
      */
     public static boolean validatePKCECodeChallenge(String codeChallenge, String codeChallengeMethod) {
-        if(codeChallengeMethod == null || OAuthConstants.OAUTH_PKCE_PLAIN_CHALLENGE.equals(codeChallengeMethod)) {
+        if (codeChallengeMethod == null || OAuthConstants.OAUTH_PKCE_PLAIN_CHALLENGE.equals(codeChallengeMethod)) {
             return validatePKCECodeVerifier(codeChallenge);
-        }
-        else if (OAuthConstants.OAUTH_PKCE_S256_CHALLENGE.equals(codeChallengeMethod)) {
+        } else if (OAuthConstants.OAUTH_PKCE_S256_CHALLENGE.equals(codeChallengeMethod)) {
             // SHA256 code challenge is 256 bits that is 256 / 6 ~= 43
             // See https://tools.ietf.org/html/rfc7636#section-3
-            if(codeChallenge != null && codeChallenge.trim().length() == 43) {
+            if (codeChallenge != null && codeChallenge.trim().length() == 43) {
                 return true;
             }
         }
         //provided code challenge method is wrong
         return false;
     }
+
     public static boolean doPKCEValidation(String referenceCodeChallenge, String codeVerifier, String challenge_method, OAuthAppDO oAuthAppDO) throws IdentityOAuth2Exception {
         //ByPass PKCE validation if PKCE Support is disabled
-        if(!isPKCESupportEnabled()) {
+        if (!isPKCESupportEnabled()) {
             return true;
         }
         if (oAuthAppDO != null && oAuthAppDO.isPkceMandatory() || referenceCodeChallenge != null) {
 
             //As per RFC 7636 Fallback to 'plain' if no code_challenge_method parameter is sent
-            if(challenge_method == null || challenge_method.trim().length() == 0) {
+            if (challenge_method == null || challenge_method.trim().length() == 0) {
                 challenge_method = "plain";
             }
 
             //if app with no PKCE code verifier arrives
             if ((codeVerifier == null || codeVerifier.trim().length() == 0)) {
                 //if pkce is mandatory, throw error
-                if(oAuthAppDO.isPkceMandatory()) {
+                if (oAuthAppDO.isPkceMandatory()) {
                     throw new IdentityOAuth2Exception("No PKCE code verifier found.PKCE is mandatory for this " +
                             "oAuth 2.0 application.");
                 } else {
                     //PKCE is optional, see if the authz code was requested with a PKCE challenge
-                    if(referenceCodeChallenge == null || referenceCodeChallenge.trim().length() == 0) {
+                    if (referenceCodeChallenge == null || referenceCodeChallenge.trim().length() == 0) {
                         //since no PKCE challenge was provided
                         return true;
                     } else {
@@ -1063,12 +1065,12 @@ public class OAuth2Util {
                 }
             }
             //verify that the code verifier is upto spec as per RFC 7636
-            if(!validatePKCECodeVerifier(codeVerifier)) {
+            if (!validatePKCECodeVerifier(codeVerifier)) {
                 throw new IdentityOAuth2Exception("Code verifier used is not up to RFC 7636 specifications.");
             }
             if (OAuthConstants.OAUTH_PKCE_PLAIN_CHALLENGE.equals(challenge_method)) {
                 //if the current application explicitly doesn't support plain, throw exception
-                if(!oAuthAppDO.isPkceSupportPlain()) {
+                if (!oAuthAppDO.isPkceSupportPlain()) {
                     throw new IdentityOAuth2Exception("This application does not allow 'plain' transformation algorithm.");
                 }
                 if (!referenceCodeChallenge.equals(codeVerifier)) {
@@ -1107,7 +1109,7 @@ public class OAuth2Util {
     }
 
     public static boolean isImplicitResponseType(String responseType) {
-        if(StringUtils.isNotBlank(responseType) && (responseType.contains(ResponseType.TOKEN.toString()) ||
+        if (StringUtils.isNotBlank(responseType) && (responseType.contains(ResponseType.TOKEN.toString()) ||
                 responseType.contains(OAuthConstants.ID_TOKEN))) {
             return true;
         }
@@ -1207,7 +1209,7 @@ public class OAuth2Util {
      * @param tenantId
      */
     public static void initTokenExpiryTimesOfSps(int tenantId) {
-        try{
+        try {
             Registry registry = OAuth2ServiceComponentHolder.getRegistryService().getConfigSystemRegistry(tenantId);
             if (!registry.resourceExists(OAuthConstants.TOKEN_EXPIRE_TIME_RESOURCE_PATH)) {
                 Resource resource = registry.newResource();
@@ -1370,7 +1372,7 @@ public class OAuth2Util {
             OMElement element = (OMElement) it.next();
             if ("Claim".equals(element.getLocalName())) {
                 String commaSeparatedClaimNames = element.getText();
-                if(StringUtils.isNotBlank(commaSeparatedClaimNames)){
+                if (StringUtils.isNotBlank(commaSeparatedClaimNames)) {
                     claimConfig.append(commaSeparatedClaimNames.trim());
                 }
             }
@@ -1467,8 +1469,8 @@ public class OAuth2Util {
     /**
      * This method returns essential:true claims list from the request parameter of OIDC authorization request
      *
-     * @param claimRequestor claimrequestor is either id_token or  userinfo
-     * @param requestedClaimsFromRequestParam  claims defined in the value of the request parameter
+     * @param claimRequestor                  claimrequestor is either id_token or  userinfo
+     * @param requestedClaimsFromRequestParam claims defined in the value of the request parameter
      * @return the claim list which have attribute vale essentail :true
      */
     public static List<String> essentialClaimsFromRequestParam(String claimRequestor, Map<String, List<Claim>>
@@ -1481,7 +1483,7 @@ public class OAuth2Util {
             Map<String, String> attributesMap = claimforClaimRequestor.getClaimAttributesMap();
             if (attributesMap != null) {
                 for (Map.Entry<String, String> attributesEntryMap : attributesMap.entrySet()) {
-                        attributeValue = attributesMap.get(attributesEntryMap.getKey());
+                    attributeValue = attributesMap.get(attributesEntryMap.getKey());
 
                     if (ESSENTAIL.equals(attributesEntryMap.getKey()) && Boolean.parseBoolean(attributeValue)) {
                         essentialClaimsfromRequestParam.add(claim);
@@ -1542,8 +1544,9 @@ public class OAuth2Util {
 
     /**
      * Returns the private key of the keystore manager.
+     *
      * @param tenantDomain tenant domain
-     * @param tenantId tenant id
+     * @param tenantId     tenant id
      * @return private key
      * @throws IdentityOAuth2Exception
      */
