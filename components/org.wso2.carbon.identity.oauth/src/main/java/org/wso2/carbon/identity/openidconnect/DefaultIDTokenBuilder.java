@@ -36,6 +36,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.common.message.types.GrantType;
+import org.apache.oltu.oauth2.common.message.types.ResponseType;
 import org.wso2.carbon.base.MultitenantConstants;
 import org.wso2.carbon.core.util.KeyStoreManager;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
@@ -259,26 +260,12 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
 
         String atHash = null;
         if (!JWSAlgorithm.NONE.getName().equals(signatureAlgorithm.getName())) {
-            String digAlg = mapDigestAlgorithm(signatureAlgorithm);
-            MessageDigest md;
-            try {
-                md = MessageDigest.getInstance(digAlg);
-            } catch (NoSuchAlgorithmException e) {
-                throw new IdentityOAuth2Exception("Invalid Algorithm : " + digAlg);
-            }
-            md.update(tokenRespDTO.getAccessToken().getBytes(Charsets.UTF_8));
-            byte[] digest = md.digest();
-            int leftHalfBytes = 16;
-            if (SHA384.equals(digAlg)) {
-                leftHalfBytes = 24;
-            } else if (SHA512.equals(digAlg)) {
-                leftHalfBytes = 32;
-            }
-            byte[] leftmost = new byte[leftHalfBytes];
-            for (int i = 0; i < leftHalfBytes; i++) {
-                leftmost[i] = digest[i];
-            }
-            atHash = new String(Base64.encodeBase64URLSafe(leftmost), Charsets.UTF_8);
+            atHash = getHashValue(tokenRespDTO.getAccessToken());
+        }
+
+        String cHash = null;
+        if (!JWSAlgorithm.NONE.getName().equals(signatureAlgorithm.getName())) {
+            cHash = getHashValue(request.getOauth2AccessTokenReqDTO().getAuthorizationCode());
         }
 
 
@@ -310,6 +297,9 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         }
         if (atHash != null) {
             jwtClaimsSet.setClaim("at_hash", atHash);
+        }
+        if (cHash != null){
+            jwtClaimsSet.setClaim("c_hash", cHash);
         }
         if (nonceValue != null) {
             jwtClaimsSet.setClaim("nonce", nonceValue);
@@ -379,28 +369,15 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         if (!JWSAlgorithm.NONE.getName().equals(signatureAlgorithm.getName()) &&
                 !OAuthConstants.ID_TOKEN.equalsIgnoreCase(responseType) &&
                 !OAuthConstants.NONE.equalsIgnoreCase(responseType)) {
-            String digAlg = mapDigestAlgorithm(signatureAlgorithm);
-            MessageDigest md;
-            try {
-                md = MessageDigest.getInstance(digAlg);
-            } catch (NoSuchAlgorithmException e) {
-                throw new IdentityOAuth2Exception("Invalid Algorithm : " + digAlg);
-            }
-            md.update(tokenRespDTO.getAccessToken().getBytes(Charsets.UTF_8));
-            byte[] digest = md.digest();
-            int leftHalfBytes = 16;
-            if (SHA384.equals(digAlg)) {
-                leftHalfBytes = 24;
-            } else if (SHA512.equals(digAlg)) {
-                leftHalfBytes = 32;
-            }
-            byte[] leftmost = new byte[leftHalfBytes];
-            for (int i = 0; i < leftHalfBytes; i++) {
-                leftmost[i] = digest[i];
-            }
-            atHash = new String(Base64.encodeBase64URLSafe(leftmost), Charsets.UTF_8);
+            atHash = getHashValue(tokenRespDTO.getAccessToken());
         }
 
+        String cHash = null;
+        if (!JWSAlgorithm.NONE.getName().equals(signatureAlgorithm.getName()) &&
+                isCodeHashApplicable(responseType) &&
+                StringUtils.isNotBlank(tokenRespDTO.getAuthorizationCode())) {
+            cHash = getHashValue(tokenRespDTO.getAuthorizationCode());
+        }
 
         if (log.isDebugEnabled()) {
             StringBuilder stringBuilder = (new StringBuilder())
@@ -433,6 +410,9 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         }
         if (atHash != null) {
             jwtClaimsSet.setClaim("at_hash", atHash);
+        }
+        if (cHash != null){
+            jwtClaimsSet.setClaim("c_hash", cHash);
         }
         if (nonceValue != null) {
             jwtClaimsSet.setClaim("nonce", nonceValue);
@@ -962,6 +942,34 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
             String errorMsg = String.format(ERROR_GET_RESIDENT_IDP, tenantDomain);
             throw new IdentityOAuth2Exception(errorMsg, e);
         }
+    }
+
+    private String getHashValue(String value) throws IdentityOAuth2Exception {
+        String digAlg = mapDigestAlgorithm(signatureAlgorithm);
+        MessageDigest md;
+        try {
+            md = MessageDigest.getInstance(digAlg);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IdentityOAuth2Exception("Error creating the hash value. Invalid Digest Algorithm: " + digAlg);
+        }
+
+        md.update(value.getBytes(Charsets.UTF_8));
+        byte[] digest = md.digest();
+        int leftHalfBytes = 16;
+        if (SHA384.equals(digAlg)) {
+            leftHalfBytes = 24;
+        } else if (SHA512.equals(digAlg)) {
+            leftHalfBytes = 32;
+        }
+        byte[] leftmost = new byte[leftHalfBytes];
+        System.arraycopy(digest, 0, leftmost, 0, leftHalfBytes);
+        return new String(Base64.encodeBase64URLSafe(leftmost), Charsets.UTF_8);
+    }
+
+    private boolean isCodeHashApplicable(String responseType) {
+        // If the ID Token is issued from the Authorization Endpoint with a code c_hash should be generated.
+        return responseType.contains(ResponseType.CODE.toString()) &&
+                !OAuthConstants.NONE.equalsIgnoreCase(responseType);
     }
 
 }
