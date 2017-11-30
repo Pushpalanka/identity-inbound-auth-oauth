@@ -264,10 +264,10 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
         }
 
         String cHash = null;
-        if (!JWSAlgorithm.NONE.getName().equals(signatureAlgorithm.getName())) {
+        if (!JWSAlgorithm.NONE.getName().equals(signatureAlgorithm.getName())
+                && request.getOauth2AccessTokenReqDTO().getAuthorizationCode() != null) {
             cHash = getHashValue(request.getOauth2AccessTokenReqDTO().getAuthorizationCode());
         }
-
 
         if (log.isDebugEnabled()) {
             StringBuilder stringBuilder = (new StringBuilder())
