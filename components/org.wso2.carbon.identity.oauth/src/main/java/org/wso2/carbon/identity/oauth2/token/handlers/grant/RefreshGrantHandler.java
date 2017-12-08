@@ -227,8 +227,13 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
         }
 
         // Default Validity Period (in seconds)
-        long validityPeriodInMillis = OAuthServerConfiguration.getInstance()
-                .getUserAccessTokenValidityPeriodInSeconds() * 1000;
+        long validityPeriodInMillis = 0;
+        if (spTimeConfigObj.getUserAccessTokenExpiryTime() != null) {
+            validityPeriodInMillis = spTimeConfigObj.getUserAccessTokenExpiryTime();
+        } else {
+            validityPeriodInMillis = OAuthServerConfiguration.getInstance()
+                    .getUserAccessTokenValidityPeriodInSeconds() * 1000;
+        }
 
         // if a VALID validity period is set through the callback, then use it
         long callbackValidityPeriod = tokReqMsgCtx.getValidityPeriod();
@@ -239,8 +244,12 @@ public class RefreshGrantHandler extends AbstractAuthorizationGrantHandler {
         // If issuing new refresh token, use default refresh token validity Period
         // otherwise use existing refresh token's validity period
         if (refreshTokenValidityPeriodInMillis == 0) {
-            refreshTokenValidityPeriodInMillis = OAuthServerConfiguration.getInstance()
-                                                         .getRefreshTokenValidityPeriodInSeconds() * 1000;
+            if (spTimeConfigObj.getRefreshTokenExpiryTime() != null) {
+                refreshTokenValidityPeriodInMillis = spTimeConfigObj.getRefreshTokenExpiryTime();
+            } else {
+                refreshTokenValidityPeriodInMillis = OAuthServerConfiguration.getInstance()
+                        .getRefreshTokenValidityPeriodInSeconds() * 1000;
+            }
         }
 
         String tokenType;
