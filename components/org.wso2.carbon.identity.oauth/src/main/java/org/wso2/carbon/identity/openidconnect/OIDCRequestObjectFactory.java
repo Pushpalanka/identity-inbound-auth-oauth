@@ -51,15 +51,14 @@ public class OIDCRequestObjectFactory {
          * parameters MUST be included using the OAuth 2.0 request syntax, since they are REQUIRED by OAuth 2.0.
          * The values for these parameters MUST match those in the Request Object, if present
          */
-        if (getBuildRequestObject(REQUEST_URI_PARAM_VALUE_BUILDER) != null) {
-            if (isRequestParameter(oauthRequest.getParam(REQUEST))) {
-                getBuildRequestObject(REQUEST_PARAM_VALUE_BUILDER).buildRequestObject(oauthRequest.getParam(REQUEST),
-                        oAuth2Parameters, requestObject);
-                validateClientIdAndResponseType(oauthRequest, requestObject);
-            } else if (isRequestUri(REQUEST_URI)) {
-                getBuildRequestObject(REQUEST_URI_PARAM_VALUE_BUILDER).buildRequestObject(oauthRequest.
-                        getParam(REQUEST_URI), oAuth2Parameters, requestObject);
-            }
+
+        if (isRequestParameter(oauthRequest.getParam(REQUEST)) && getBuildRequestObject(REQUEST_PARAM_VALUE_BUILDER) != null) {
+            getBuildRequestObject(REQUEST_PARAM_VALUE_BUILDER).buildRequestObject(oauthRequest.getParam(REQUEST),
+                    oAuth2Parameters, requestObject);
+            validateClientIdAndResponseType(oauthRequest, requestObject);
+        } else if (isRequestUri(REQUEST_URI) && getBuildRequestObject(REQUEST_URI_PARAM_VALUE_BUILDER) != null) {
+            getBuildRequestObject(REQUEST_URI_PARAM_VALUE_BUILDER).buildRequestObject(oauthRequest.
+                    getParam(REQUEST_URI), oAuth2Parameters, requestObject);
         }
     }
 
