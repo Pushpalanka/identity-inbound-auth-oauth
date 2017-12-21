@@ -1361,33 +1361,34 @@ public class OAuthServerConfiguration {
         if (requestObjectBuildersElem != null) {
             Iterator<OMElement> iterator = requestObjectBuildersElem
                     .getChildrenWithName(getQNameWithIdentityNS(ConfigElements.REQUEST_OBJECT_BUILDER));
-            while (iterator.hasNext()) {
-                OMElement requestObjectBuildersElement = iterator.next();
-                OMElement builderNameElement = requestObjectBuildersElement
-                        .getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.BUILDER_NAME));
-                String builderName = null;
-                if (builderNameElement != null) {
-                    builderName = builderNameElement.getText();
-                }
+            if (!iterator.hasNext()) {
+                // if this element is not present, assume the default case.
+                log.warn("\'RequestObjectBuilders\' element not configured in identity.xml. " +
+                        "Therefore instantiating default request object builders");
 
-                OMElement requestObjectImplClassElement = requestObjectBuildersElement
-                        .getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.REQUEST_OBJECT_IMPL_CLASS));
-                String requestObjectImplClass = null;
-                if (requestObjectImplClassElement != null) {
-                    requestObjectImplClass = requestObjectImplClassElement.getText();
+                Map<String, String> defaultRequestObjectBuilders = new HashMap<>();
+                defaultRequestObjectBuilders.put(REQUEST_PARAM_VALUE_BUILDER, REQUEST_PARAM_VALUE_BUILDER_CLASS);
+                requestObjectBuilderClassNames.putAll(defaultRequestObjectBuilders);
+            } else {
+                while (iterator.hasNext()) {
+                    OMElement requestObjectBuildersElement = iterator.next();
+                    OMElement builderNameElement = requestObjectBuildersElement
+                            .getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.BUILDER_NAME));
+                    String builderName = null;
+                    if (builderNameElement != null) {
+                        builderName = builderNameElement.getText();
+                    }
+
+                    OMElement requestObjectImplClassElement = requestObjectBuildersElement
+                            .getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.REQUEST_OBJECT_IMPL_CLASS));
+                    String requestObjectImplClass = null;
+                    if (requestObjectImplClassElement != null) {
+                        requestObjectImplClass = requestObjectImplClassElement.getText();
+                    }
+                    requestObjectBuilderClassNames.put(builderName, requestObjectImplClass);
                 }
-                requestObjectBuilderClassNames.put(builderName, requestObjectImplClass);
             }
-        } else {
-            // if this element is not present, assume the default case.
-            log.warn("\'RequestObjectBuilders\' element not configured in identity.xml. " +
-                    "Therefore instantiating default request object builders");
-
-            Map<String, String> defaultRequestObjectBuilders = new HashMap<>();
-            defaultRequestObjectBuilders.put(REQUEST_PARAM_VALUE_BUILDER, REQUEST_PARAM_VALUE_BUILDER_CLASS);
-            requestObjectBuilderClassNames.putAll(defaultRequestObjectBuilders);
         }
-
         if (log.isDebugEnabled()) {
             for (Map.Entry entry : requestObjectBuilderClassNames.entrySet()) {
                 String builderName = entry.getKey().toString();
@@ -1695,7 +1696,7 @@ public class OAuthServerConfiguration {
                 oauthConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.OPENID_CONNECT));
 
         if (openIDConnectConfigElem != null) {
-                parseRequestObjectConfig(oauthConfigElem);
+                parseRequestObjectConfig(openIDConnectConfigElem);
 
             if (openIDConnectConfigElem.getFirstChildWithName(getQNameWithIdentityNS(ConfigElements.OPENID_CONNECT_IDTOKEN_BUILDER)) != null) {
                 openIDConnectIDTokenBuilderClassName =
@@ -1879,7 +1880,6 @@ public class OAuthServerConfiguration {
         private static final String IDENTITY_OAUTH_TOKEN_GENERATOR = "IdentityOAuthTokenGenerator";
 
         // Request Object Configs
-        private static final String REQUEST_OBJECT_BUILDERS = "RequestObjectBuilders";
         private static final String REQUEST_OBJECT_BUILDER = "RequestObjectBuilder";
         private static final String BUILDER_NAME = "BuilderName";
         private static final String REQUEST_OBJECT_IMPL_CLASS = "RequestObjectBuilderImplClass";

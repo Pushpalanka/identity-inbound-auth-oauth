@@ -20,6 +20,7 @@ package org.wso2.carbon.identity.openidconnect.model;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -27,7 +28,9 @@ import java.util.HashMap;
 /**
  * This class is used to model the request object which comes as a parameter of the OIDC authorization request
  */
-public class RequestObject {
+public class RequestObject implements Serializable {
+
+    private static final long serialVersionUID = 7180827153818376043L;
 
     private String clientId;
     private String redirectUri;
@@ -123,10 +126,6 @@ public class RequestObject {
         return isSignatureValid;
     }
 
-    public void setIsSignatureValid(boolean isSignatureValid) {
-        this.isSignatureValid = isSignatureValid;
-    }
-
     public Map<String, Object> getProperties() {
         return properties;
     }
@@ -143,11 +142,4 @@ public class RequestObject {
         this.scopes = scopes;
     }
 
-    public boolean isValidRequestURI() {
-        return isValidRequestURI;
-    }
-
-    public void setIsValidRequestURI(boolean isValidRequestURI) {
-        this.isValidRequestURI = isValidRequestURI;
-    }
 }
