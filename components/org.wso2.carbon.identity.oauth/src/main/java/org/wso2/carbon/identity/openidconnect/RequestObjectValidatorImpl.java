@@ -178,6 +178,8 @@ public class RequestObjectValidatorImpl implements RequestObjectValidator {
                 validateSignature(requestObject);
             } else if (jwtTokenValues.length == NUMBER_OF_PARTS_IN_JWE) {
                 decrypt(requestObject, oAuth2Parameters);
+            } else if (jwtTokenValues.length == 1) {
+                setPayload(new String(base64Url.decode(jwtTokenValues[0].getBytes())));
             }
         }
     }
