@@ -21,6 +21,7 @@
     <test name="Util-Tests" preserve-order="true" parallel="false">
         <classes>
             <class name="org.wso2.carbon.identity.oauth2.util.OAuth2UtilTest"/>
+            <class name="org.wso2.carbon.identity.oauth2.token.handlers.grant.PasswordGrantHandlerTest"/>
             <!--<class name="org.wso2.carbon.identity.openidconnect.RequestParamRequestObjectBuilderTest"/>-->
             <!--<class name="org.wso2.carbon.identity.openidconnect.RequestObjectValidatorImplTest"/>-->
         </classes>

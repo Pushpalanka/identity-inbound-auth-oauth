@@ -1,0 +1,156 @@
+/*
+ * Copyright (c) 2017, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *
+ * WSO2 Inc. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.wso2.carbon.identity.oauth2.token.handlers.grant;
+
+import org.mockito.Mock;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.testng.PowerMockTestCase;
+import org.testng.annotations.DataProvider;
+import org.testng.annotations.Test;
+import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
+import org.wso2.carbon.identity.application.common.model.LocalAndOutboundAuthenticationConfig;
+import org.wso2.carbon.identity.application.common.model.ServiceProvider;
+import org.wso2.carbon.identity.application.mgt.ApplicationManagementService;
+import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
+import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
+import org.wso2.carbon.identity.oauth.internal.OAuthComponentServiceHolder;
+import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
+import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenReqDTO;
+import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
+import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
+import org.wso2.carbon.identity.oauth2.token.OauthTokenIssuer;
+import org.wso2.carbon.user.api.UserStoreException;
+import org.wso2.carbon.user.core.UserRealm;
+import org.wso2.carbon.user.core.UserStoreManager;
+import org.wso2.carbon.user.core.service.RealmService;
+import org.wso2.carbon.user.core.util.UserCoreUtil;
+import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
+
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyString;
+import static org.powermock.api.mockito.PowerMockito.mockStatic;
+import static org.powermock.api.mockito.PowerMockito.spy;
+import static org.powermock.api.mockito.PowerMockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+
+@PrepareForTest(
+        {
+                MultitenantUtils.class,
+                OAuth2ServiceComponentHolder.class,
+                IdentityTenantUtil.class,
+                UserCoreUtil.class,
+                OAuthComponentServiceHolder.class,
+                OAuthServerConfiguration.class
+        }
+)
+public class PasswordGrantHandlerTest extends PowerMockTestCase {
+
+    @Mock
+    private OAuth2AccessTokenReqDTO oAuth2AccessTokenReqDTO;
+    private OAuthTokenReqMessageContext tokReqMsgCtx = spy(new OAuthTokenReqMessageContext(oAuth2AccessTokenReqDTO));
+    @Mock
+    private ApplicationManagementService applicationManagementService;
+    @Mock
+    private ServiceProvider serviceProvider;
+    @Mock
+    private OAuthComponentServiceHolder oAuthComponentServiceHolder;
+    @Mock
+    private RealmService realmService;
+    @Mock
+    private UserRealm userRealm;
+    @Mock
+    private UserStoreManager userStoreManager;
+    @Mock
+    private OAuthServerConfiguration serverConfiguration;
+    @Mock
+    private OauthTokenIssuer oauthIssuer;
+    @Mock
+    private LocalAndOutboundAuthenticationConfig localAndOutboundAuthenticationConfig;
+
+    static final String clientId = "IbWwXLf5MnKSY6x6gnR_7gd7f1wa";
+
+    @DataProvider(name = "ValidateGrantDataProvider")
+    public Object[][] buildScopeString() {
+        return new Object[][]{
+                {"DOMAIN/randomUser@wso2.com", true},
+        };
+    }
+
+    @Test(dataProvider = "ValidateGrantDataProvider")
+    public void testValidateGrant(String username, boolean isSaas) throws Exception {
+
+        boolean isValid = validateGrant(username, isSaas, true, true);
+        assertTrue(isValid, "Password grant validation should be successful");
+    }
+
+    @Test(dataProvider = "ValidateGrantDataProvider")
+    public void testSubjectIdentifier(String username, boolean isSaas) throws Exception {
+
+        validateGrant(username, isSaas, true, true);
+        assertEquals(tokReqMsgCtx.getAuthorizedUser().getAuthenticatedSubjectIdentifier(),
+                "DOMAIN/randomUser@wso2.com");
+
+        validateGrant(username, isSaas, false, false);
+        assertEquals(tokReqMsgCtx.getAuthorizedUser().getAuthenticatedSubjectIdentifier(), "randomUser");
+    }
+
+
+    private boolean validateGrant(String username, boolean isSaas, boolean isRealmInSubject,
+                                  boolean isTenantDomainInSubject)
+            throws UserStoreException, IdentityApplicationManagementException, IdentityOAuth2Exception {
+
+        when(tokReqMsgCtx.getOauth2AccessTokenReqDTO()).thenReturn(oAuth2AccessTokenReqDTO);
+        when(oAuth2AccessTokenReqDTO.getResourceOwnerUsername()).thenReturn(username);
+        when(oAuth2AccessTokenReqDTO.getClientId()).thenReturn(clientId);
+        when(oAuth2AccessTokenReqDTO.getTenantDomain()).thenReturn("wso2.com");
+        when(oAuth2AccessTokenReqDTO.getResourceOwnerPassword()).thenReturn("randomPassword");
+
+        mockStatic(OAuthServerConfiguration.class);
+        when(OAuthServerConfiguration.getInstance()).thenReturn(serverConfiguration);
+
+        when(serverConfiguration.getIdentityOauthTokenIssuer()).thenReturn(oauthIssuer);
+
+        mockStatic(OAuth2ServiceComponentHolder.class);
+        when(OAuth2ServiceComponentHolder.getApplicationMgtService()).thenReturn(applicationManagementService);
+
+        mockStatic(IdentityTenantUtil.class);
+        when(IdentityTenantUtil.getTenantIdOfUser(anyString())).thenReturn(1);
+
+        mockStatic(OAuthComponentServiceHolder.class);
+        when(OAuthComponentServiceHolder.getInstance()).thenReturn(oAuthComponentServiceHolder);
+
+        when(oAuthComponentServiceHolder.getRealmService()).thenReturn(realmService);
+        when(realmService.getTenantUserRealm(anyInt())).thenReturn(userRealm);
+        when(userRealm.getUserStoreManager()).thenReturn(userStoreManager);
+        when(userStoreManager.authenticate(anyString(), any())).thenReturn(true);
+
+        when(applicationManagementService.getServiceProviderByClientId(anyString(), anyString(), anyString()))
+                .thenReturn(serviceProvider);
+        when(serviceProvider.isSaasApp()).thenReturn(isSaas);
+        when(serviceProvider.getLocalAndOutBoundAuthenticationConfig()).thenReturn(localAndOutboundAuthenticationConfig);
+
+        when(localAndOutboundAuthenticationConfig.isUseUserstoreDomainInLocalSubjectIdentifier()).thenReturn(isRealmInSubject);
+        when(localAndOutboundAuthenticationConfig.isUseTenantDomainInLocalSubjectIdentifier()).thenReturn(isTenantDomainInSubject);
+
+        PasswordGrantHandler passwordGrantHandler = new PasswordGrantHandler();
+        return passwordGrantHandler.validateGrant(tokReqMsgCtx);
+    }
+}
