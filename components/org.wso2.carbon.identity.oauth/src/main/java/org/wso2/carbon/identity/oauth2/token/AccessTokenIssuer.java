@@ -22,6 +22,9 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.oltu.oauth2.common.error.OAuthError;
 import org.apache.oltu.oauth2.common.message.types.GrantType;
+import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
+import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
+import org.wso2.carbon.identity.application.common.model.ServiceProvider;
 import org.wso2.carbon.identity.base.IdentityConstants;
 import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
@@ -39,6 +42,7 @@ import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.ResponseHeader;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenReqDTO;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenRespDTO;
+import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.token.handlers.clientauth.ClientAuthenticationHandler;
 import org.wso2.carbon.identity.oauth2.token.handlers.grant.AuthorizationGrantHandler;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
@@ -65,6 +69,7 @@ public class AccessTokenIssuer {
             new ArrayList<ClientAuthenticationHandler>();
     private AppInfoCache appInfoCache;
     private static final String OIDC_SCOPE_VALIDATOR_CLASS = "org.wso2.carbon.identity.oauth2.validators.OIDCScopeValidator";
+    private static final String INBOUND_AUTH2_TYPE = "oauth2";
 
     /**
      * Private constructor which will not allow to create objects of this class from outside
@@ -182,7 +187,9 @@ public class AccessTokenIssuer {
             return tokenRespDTO;
         }
         if (!authzGrantHandler.isOfTypeApplicationUser()) {
-            tokReqMsgCtx.setAuthorizedUser(oAuthAppDO.getUser());
+            AuthenticatedUser user = oAuthAppDO.getUser();
+            setSubjectIdentifier(user, tokenReqDTO);
+            tokReqMsgCtx.setAuthorizedUser(user);
         }
 
         boolean isAuthorizedClient = false;
@@ -312,6 +319,26 @@ public class AccessTokenIssuer {
         }
 
         return tokenRespDTO;
+    }
+
+    private void setSubjectIdentifier(AuthenticatedUser user, OAuth2AccessTokenReqDTO tokenReqDTO)
+            throws IdentityOAuth2Exception {
+
+        String clientId = tokenReqDTO.getClientId();
+        String spTenantDomain = tokenReqDTO.getTenantDomain();
+        ServiceProvider serviceProvider;
+        try {
+            serviceProvider = OAuth2ServiceComponentHolder.getApplicationMgtService().getServiceProviderByClientId(
+                    clientId, INBOUND_AUTH2_TYPE, spTenantDomain);
+        } catch (IdentityApplicationManagementException e) {
+            throw new IdentityOAuth2Exception("Error occurred while retrieving OAuth2 application data for client id " +
+                    clientId, e);
+        }
+
+        String subjectIdentifier = user.getUsernameAsSubjectIdentifier(serviceProvider
+                        .getLocalAndOutBoundAuthenticationConfig().isUseUserstoreDomainInLocalSubjectIdentifier(),
+                serviceProvider.getLocalAndOutBoundAuthenticationConfig().isUseTenantDomainInLocalSubjectIdentifier());
+        user.setAuthenticatedSubjectIdentifier(subjectIdentifier);
     }
 
     private void triggerPreListeners(OAuth2AccessTokenReqDTO tokenReqDTO,
