@@ -205,17 +205,18 @@ public class DefaultIDTokenBuilder implements org.wso2.carbon.identity.openidcon
                         subject = usm.getSecondaryUserStoreManager(userStore).getUserClaimValue(username, subjectClaim, null);
                         if (StringUtils.isBlank(subject)) {
                             subject = request.getAuthorizedUser().getAuthenticatedSubjectIdentifier();
-                        }
-                        boolean useUserstoreDomainInLocalSubjectIdentifier = serviceProvider
-                                .getLocalAndOutBoundAuthenticationConfig()
-                                .isUseUserstoreDomainInLocalSubjectIdentifier();
-                        boolean useTenantDomainInLocalSubjectIdentifier = serviceProvider
-                                .getLocalAndOutBoundAuthenticationConfig().isUseTenantDomainInLocalSubjectIdentifier();
-                        if (useTenantDomainInLocalSubjectIdentifier) {
-                            subject = UserCoreUtil.addTenantDomainToEntry(subject, tenantDomain);
-                        }
-                        if (useUserstoreDomainInLocalSubjectIdentifier) {
-                            subject = IdentityUtil.addDomainToName(subject, userStore);
+                        } else {
+                            boolean useUserstoreDomainInLocalSubjectIdentifier = serviceProvider
+                                    .getLocalAndOutBoundAuthenticationConfig()
+                                    .isUseUserstoreDomainInLocalSubjectIdentifier();
+                            boolean useTenantDomainInLocalSubjectIdentifier = serviceProvider
+                                    .getLocalAndOutBoundAuthenticationConfig().isUseTenantDomainInLocalSubjectIdentifier();
+                            if (useTenantDomainInLocalSubjectIdentifier) {
+                                subject = UserCoreUtil.addTenantDomainToEntry(subject, tenantDomain);
+                            }
+                            if (useUserstoreDomainInLocalSubjectIdentifier) {
+                                subject = IdentityUtil.addDomainToName(subject, userStore);
+                            }
                         }
                     } catch (IdentityException e) {
                         String error = "Error occurred while getting user claim for user " + request
