@@ -187,7 +187,7 @@ public class AccessTokenIssuer {
             return tokenRespDTO;
         }
         if (!authzGrantHandler.isOfTypeApplicationUser()) {
-            AuthenticatedUser user = oAuthAppDO.getUser();
+            AuthenticatedUser user = new AuthenticatedUser(oAuthAppDO.getUser());
             setSubjectIdentifier(user, tokenReqDTO);
             tokReqMsgCtx.setAuthorizedUser(user);
         }
